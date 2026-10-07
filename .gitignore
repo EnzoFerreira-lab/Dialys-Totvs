@@ -41,3 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# o modelo de configuração vai para o git (sem segredos)
+!.env.example
