@@ -1,0 +1,4 @@
+# Quebras de linha iguais para toda a equipe (Windows, macOS e Linux): LF no repositório.
+* text=auto eol=lf
+*.png binary
+*.ico binary

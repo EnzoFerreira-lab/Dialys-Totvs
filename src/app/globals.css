@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens Dialys — IBM Carbon (g10) + marca TOTVS.
+ * Referência: docs/ARQUITETURA.md §5. A aplicação é light-only por definição de marca.
+ */
+:root {
+  /* Superfícies */
+  --background: #f4f5f7; /* fundo da aplicação */
+  --layer-01: #ffffff; /* cards e tiles */
+  --field-01: #f4f4f4; /* campos de formulário (Carbon field) */
+
+  /* UI Shell — Grafite TOTVS (Pantone 447C) */
+  --shell: #363636;
+  --shell-hover: #3d3d3d;
+  --shell-border: #525252;
+  --shell-text: #ffffff;
+  --shell-text-secondary: #c6c6c6;
+
+  /* Interativo — Laranja TOTVS (Pantone 2010C). Texto sempre escuro: branco reprova AA (1,9:1). */
+  --interactive: #feac0e;
+  --interactive-hover: #e59a00;
+  --interactive-active: #cc8a00;
+  --on-interactive: #161616;
+
+  /* Texto */
+  --text-primary: #161616;
+  --text-secondary: #525252;
+  --text-helper: #6f6f6f;
+  --text-placeholder: #a8a8a8;
+  --text-on-shell-muted: #a8a8a8;
+
+  /* Bordas */
+  --border-subtle: #e0e0e0;
+  --border-strong: #8d8d8d;
+  --border-info: #b7c1d2;
+
+  /* Feedback */
+  --support-error: #da1e28;
+  --support-success: #24a148;
+
+  /* Foco: grafite em fundo claro (o laranja reprova contraste 3:1 sobre #F4F5F7) */
+  --focus: #363636;
+  --focus-on-shell: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-layer-01: var(--layer-01);
+  --color-field-01: var(--field-01);
+
+  --color-shell: var(--shell);
+  --color-shell-hover: var(--shell-hover);
+  --color-shell-border: var(--shell-border);
+  --color-shell-text: var(--shell-text);
+  --color-shell-text-secondary: var(--shell-text-secondary);
+
+  --color-interactive: var(--interactive);
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-active: var(--interactive-active);
+  --color-on-interactive: var(--on-interactive);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-helper: var(--text-helper);
+  --color-text-placeholder: var(--text-placeholder);
+  --color-text-on-shell-muted: var(--text-on-shell-muted);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-border-info: var(--border-info);
+
+  --color-support-error: var(--support-error);
+  --color-support-success: var(--support-success);
+
+  --color-focus: var(--focus);
+  --color-focus-on-shell: var(--focus-on-shell);
+
+  --font-sans: var(--font-plex-sans), "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-plex-mono), Menlo, Consolas, monospace;
+
+  /* Escala tipográfica produtiva Carbon (tamanho / altura de linha) */
+  --text-label-01: 0.75rem;
+  --text-label-01--line-height: 1rem;
+  --text-body-01: 0.875rem;
+  --text-body-01--line-height: 1.25rem;
+  --text-body-02: 1rem;
+  --text-body-02--line-height: 1.5rem;
+  --text-heading-01: 0.875rem;
+  --text-heading-01--line-height: 1.25rem;
+  --text-heading-02: 1rem;
+  --text-heading-02--line-height: 1.5rem;
+  --text-heading-03: 1.25rem;
+  --text-heading-03--line-height: 1.75rem;
+  --text-heading-04: 1.75rem;
+  --text-heading-04--line-height: 2.25rem;
+  --text-heading-05: 2rem;
+  --text-heading-05--line-height: 2.5rem;
+  --text-code-01: 0.75rem;
+  --text-code-01--line-height: 1rem;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.on-shell :focus-visible {
+  outline-color: var(--focus-on-shell);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes onda {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

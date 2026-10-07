@@ -1,0 +1,54 @@
+{
+  "id": "grupo-horizonte",
+  "titulo": "Grupo Horizonte — folha manual e risco de concorrente",
+  "contaId": "c-006",
+  "transcricao": "Vendedor (TOTVS): Obrigado pelo tempo, Marcos. Como está o uso do sistema depois da última atualização?\nCliente (Diretor Administrativo): O Protheus atende bem o nosso backoffice, mas o time de RH está sofrendo muito com a folha manual. Todo fechamento vira hora extra.\nVendedor (TOTVS): Entendo. Vocês chegaram a olhar alguma alternativa para a folha?\nCliente (Diretor Administrativo): O pessoal viu uma demo da Senior e gostou, mas eu prefiro consolidar tudo na TOTVS se o RM for realmente integrado.\nVendedor (TOTVS): O RM Folha conversa nativamente com o Protheus. Posso trazer um especialista para mostrar.\nCliente (Diretor Administrativo): Pode. Só preciso de uma resposta antes da renovação do contrato, em novembro. E o CFO vai perguntar quanto isso custa a mais por mês.\nVendedor (TOTVS): Combinado, levo a proposta com os valores.",
+  "analise": {
+    "resumoExecutivo": "Backoffice estável no Protheus, mas a folha manual pressiona o RH e a Senior já apresentou uma demo. O diretor prefere consolidar na TOTVS se o RM Folha for integrado, com decisão antes da renovação de novembro.",
+    "mencoesProdutos": [
+      { "produto": "TOTVS Protheus", "status": "EM_USO", "contexto": "Atende bem o backoffice." },
+      { "produto": "TOTVS RM", "status": "INTERESSE", "contexto": "Consolidaria a folha na TOTVS se o RM for integrado ao Protheus." },
+      { "produto": "Senior Sistemas", "status": "CONCORRENTE", "contexto": "O time de RH assistiu a uma demo e gostou." }
+    ],
+    "sinais": [
+      {
+        "tipo": "CHURN_RISK",
+        "subtipo": "Avaliação de Concorrente",
+        "severidade": "ALTA",
+        "confianca": 0.86,
+        "citacaoExata": "O pessoal viu uma demo da Senior e gostou",
+        "recomendacaoAcao": "Acionar o gestor de Customer Success nesta semana: são cerca de R$ 50 mil em risco no módulo de RH antes da renovação."
+      },
+      {
+        "tipo": "OPPORTUNITY",
+        "subtipo": "Interesse Módulo",
+        "severidade": "ALTA",
+        "confianca": 0.91,
+        "citacaoExata": "eu prefiro consolidar tudo na TOTVS se o RM for realmente integrado",
+        "recomendacaoAcao": "Levar um especialista em RM Folha para demonstrar a integração nativa com o Protheus antes de novembro."
+      },
+      {
+        "tipo": "CHURN_RISK",
+        "subtipo": "Insatisfação Operacional",
+        "severidade": "MÉDIA",
+        "confianca": 0.78,
+        "citacaoExata": "o time de RH está sofrendo muito com a folha manual. Todo fechamento vira hora extra.",
+        "recomendacaoAcao": "Quantificar com o RH as horas extras do fechamento para usar no business case do RM Folha."
+      },
+      {
+        "tipo": "OBJECTION",
+        "subtipo": "Dúvida ROI/Preço",
+        "severidade": "MÉDIA",
+        "confianca": 0.74,
+        "citacaoExata": "o CFO vai perguntar quanto isso custa a mais por mês",
+        "recomendacaoAcao": "Preparar proposta com custo mensal incremental e comparação com o custo atual das horas extras."
+      }
+    ],
+    "proximosPassosSugeridos": [
+      "Reunião de retenção com o gestor de Customer Success nesta semana.",
+      "Demo técnica de integração RM Folha + Protheus com especialista.",
+      "Enviar proposta com custo mensal incremental ao CFO.",
+      "Fechar a decisão antes da renovação de novembro."
+    ]
+  }
+}
