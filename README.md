@@ -11,6 +11,7 @@ Requer Node.js 22+.
 
 ```bash
 npm install
+cp .env.example .env.local   # configuração local (não vai para o git); o padrão já roda em modo demonstração
 npm run dev        # http://localhost:3000 → redireciona para /login
 ```
 
