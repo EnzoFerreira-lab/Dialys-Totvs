@@ -7,10 +7,10 @@ export const serializarMensagem = ({ id, papel, texto, criadaEm, modo, fontes, t
   texto,
   criadaEm,
   modo: modo ?? null,
-  // Fonte de reunião abre a própria reunião na Central; fonte de conta, a reunião mais recente dela.
+  // Fonte de reunião abre a própria reunião na Central; fonte de empresa, a ficha do cliente.
   fontes: (fontes ?? []).map((f) => ({
     ...f,
-    link: f.tipo === "reuniao" ? `/insights?reuniao=${encodeURIComponent(f.id)}` : `/insights?conta=${encodeURIComponent(f.contaId)}`,
+    link: f.tipo === "reuniao" ? `/insights?reuniao=${encodeURIComponent(f.id)}` : `/contas/${encodeURIComponent(f.contaId)}`,
   })),
   /** "briefing": a tela lê esta resposta em voz. */
   tipo: tipo ?? null,

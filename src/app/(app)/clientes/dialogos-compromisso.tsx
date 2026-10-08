@@ -153,7 +153,7 @@ export function DetalheCompromisso({ compromisso, fuso, onFechar, onEditar, onAl
             {c.cliente ? (
               <span className="flex flex-wrap items-center gap-x-3">
                 {c.cliente.nome}
-                <Link href={`/insights?${new URLSearchParams({ conta: c.cliente.id })}`} className="text-[13px] text-[#0F62FE] hover:underline">
+                <Link href={`/contas/${encodeURIComponent(c.cliente.id)}`} className="text-[13px] text-[#0F62FE] hover:underline">
                   Ver cliente
                 </Link>
               </span>
@@ -183,7 +183,9 @@ export function DetalheCompromisso({ compromisso, fuso, onFechar, onEditar, onAl
 
 // ---- Cadastro e edição ------------------------------------------------------------------------
 
-export type FormularioAberto = { modo: "novo"; data: DataCivil; hora: string } | { modo: "editar"; compromisso: Compromisso };
+export type FormularioAberto =
+  | { modo: "novo"; data: DataCivil; hora: string; /** Cliente já escolhido (ex.: "Marcar reunião" na aba Clientes). */ cliente?: { id: string; nome: string }; titulo?: string }
+  | { modo: "editar"; compromisso: Compromisso };
 
 type Campos = { titulo: string; contaId: string; data: string; inicio: string; fim: string; local: string; observacoes: string };
 type Erros = Partial<Record<keyof Campos | "geral", string>>;
@@ -196,7 +198,15 @@ const somarUmaHora = (hora: string) => {
 
 function camposIniciais(aberto: FormularioAberto, fuso: string): Campos {
   if (aberto.modo === "novo") {
-    return { titulo: "", contaId: "", data: aberto.data, inicio: aberto.hora, fim: somarUmaHora(aberto.hora), local: "", observacoes: "" };
+    return {
+      titulo: aberto.titulo ?? "",
+      contaId: aberto.cliente?.id ?? "",
+      data: aberto.data,
+      inicio: aberto.hora,
+      fim: somarUmaHora(aberto.hora),
+      local: "",
+      observacoes: "",
+    };
   }
   const c = aberto.compromisso;
   return {
@@ -288,8 +298,10 @@ export function FormularioCompromisso({ aberto, fuso, onFechar, onSalvo }: Formu
 
   const editando = aberto.modo === "editar" ? aberto.compromisso : null;
   const opcoes = [...(clientes ?? [])];
-  if (editando?.cliente && !opcoes.some((c) => c.id === editando.cliente?.id)) {
-    opcoes.unshift({ id: editando.cliente.id, nome: editando.cliente.nome, segmento: null, situacao: null });
+  // O cliente já escolhido aparece na lista mesmo que ela ainda esteja carregando.
+  const preEscolhido = editando?.cliente ?? (aberto.modo === "novo" ? aberto.cliente : undefined);
+  if (preEscolhido && !opcoes.some((c) => c.id === preEscolhido.id)) {
+    opcoes.unshift({ id: preEscolhido.id, nome: preEscolhido.nome, segmento: null, situacao: null });
   }
   const alterar = (campo: keyof Campos) => (evento: { target: { value: string } }) => {
     setCampos({ ...campos, [campo]: evento.target.value });

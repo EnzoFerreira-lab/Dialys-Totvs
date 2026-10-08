@@ -1,7 +1,7 @@
 import { ArrowRight, Chat, CheckmarkFilled, Growth, WarningAlt } from "@carbon/icons-react";
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { linkReuniao, type Alerta } from "@/lib/alertas";
+import { linkCliente, linkReuniao, type Alerta } from "@/lib/alertas";
 import { cn } from "@/lib/cn";
 import type { TipoSinal } from "@/lib/insights";
 import { extrairValorReais, formatarReais } from "@/lib/valores";
@@ -55,7 +55,9 @@ export function AlertaCard({ alerta, novo = false }: { alerta: Alerta; novo?: bo
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <h3 id={`alerta-${alerta.id}`} className="flex min-w-0 items-center gap-2 text-[15px] leading-5 font-semibold text-text-primary">
           <Icone size={18} className={cn("shrink-0", corIcone)} aria-hidden="true" />
-          <span className="truncate">{alerta.empresa}</span>
+          <Link href={linkCliente(alerta.contaId)} className="truncate hover:underline" title={`Ver cliente ${alerta.empresa}`}>
+            {alerta.empresa}
+          </Link>
           {novo ? (
             <span className="shrink-0 rounded-full bg-interactive px-2 py-0.5 text-[10px] leading-4 font-semibold tracking-[0.06em] text-on-interactive uppercase">
               Novo

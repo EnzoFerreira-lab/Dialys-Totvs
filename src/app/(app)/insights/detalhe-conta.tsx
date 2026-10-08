@@ -1,12 +1,13 @@
 "use client";
 
-import { AiGenerate, Chat, ChevronDown, ChevronUp, CheckmarkOutline, Copy, DocumentBlank, Download, Renew, TrashCan, WarningFilled } from "@carbon/icons-react";
+import { AiGenerate, Chat, ChevronDown, ChevronUp, CheckmarkOutline, Copy, DocumentBlank, Download, Renew, TrashCan, UserProfile, WarningFilled } from "@carbon/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { SignalTag, type SignalVariant } from "@/components/sinais/signal-tag";
 import { useToast } from "@/components/ui/provedor-toast";
+import { linkCliente } from "@/lib/alertas";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/formatar";
 import type { ContaInsight, ContextoProduto, ReuniaoCentral, Sinal } from "@/lib/insights";
@@ -176,6 +177,13 @@ export function DetalheConta({ conta, reuniao, sincronizando, erroCrm, onSincron
           >
             <Chat size={16} aria-hidden="true" />
             Perguntar ao Dialys
+          </Link>
+          <Link
+            href={linkCliente(conta.id)}
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-primary underline-offset-[3px] hover:underline print:hidden"
+          >
+            <UserProfile size={16} aria-hidden="true" />
+            Ver cliente
           </Link>
         </div>
       </header>
@@ -360,6 +368,12 @@ export function DetalheSemTranscricao({ reuniao }: { reuniao: ReuniaoCentral }) 
         className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-text-primary underline-offset-[3px] hover:underline"
       >
         Ver a reunião mais recente de {reuniao.conta.nome}
+      </Link>
+      <Link
+        href={linkCliente(reuniao.conta.id)}
+        className="mt-5 ml-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-text-primary underline-offset-[3px] hover:underline"
+      >
+        Ver cliente
       </Link>
     </article>
   );

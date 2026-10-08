@@ -1,13 +1,9 @@
 "use client";
 
-import { ArrowRight, OverflowMenuVertical, Search } from "@carbon/icons-react";
+import { ArrowRight, Search } from "@carbon/icons-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { ItemMenu, MenuSuspenso } from "@/components/ui/menu-suspenso";
-import { ModalConfirmacao } from "@/components/ui/modal-confirmacao";
-import { useToast } from "@/components/ui/provedor-toast";
+import { useEffect, useState } from "react";
 import { api, ErroDaApi, type ClienteResumo } from "@/lib/api-cliente";
-import { EVENTO_CARTEIRA_ALTERADA } from "@/lib/eventos";
 import { cn } from "@/lib/cn";
 import { ROTULO_FAIXA, type FaixaSaude } from "@/lib/saude";
 
@@ -19,7 +15,7 @@ const COR_FAIXA: Record<FaixaSaude, string> = {
   saudavel: "bg-[#A7F0BA] text-[#044317]",
 };
 
-const linkCliente = (cliente: ClienteResumo) => `/insights?${new URLSearchParams({ conta: cliente.id })}`;
+const linkCliente = (cliente: ClienteResumo) => `/contas/${encodeURIComponent(cliente.id)}`;
 
 function Situacao({ situacao }: { situacao: ClienteResumo["situacao"] }) {
   if (!situacao) {
@@ -40,17 +36,10 @@ type Estado = { clientes: ClienteResumo[]; total: number; termo: string };
 
 /** Lista compacta da carteira do usuário (o servidor filtra pelo escopo dele), com busca e "Carregar mais". */
 export function MeusClientes() {
-  const toast = useToast();
   const [busca, setBusca] = useState("");
   const [estado, setEstado] = useState<Estado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregandoMais, setCarregandoMais] = useState(false);
-
-  const [removendo, setRemovendo] = useState<ClienteResumo | null>(null);
-  const [ocupado, setOcupado] = useState(false);
-  const [erroRemocao, setErroRemocao] = useState<string | null>(null);
-  /** Trava síncrona contra clique duplo em "Remover". */
-  const removendoAgora = useRef(false);
 
 
   // Busca no servidor, com uma pausa curta enquanto a pessoa digita.
@@ -76,35 +65,6 @@ export function MeusClientes() {
       window.clearTimeout(timer);
     };
   }, [busca]);
-
-  /** Tira o cliente da carteira e remove os insights dele (DELETE /api/v1/carteira/{id}). */
-  async function remover() {
-    if (!removendo || removendoAgora.current) return;
-    removendoAgora.current = true;
-    setOcupado(true);
-    setErroRemocao(null);
-    try {
-      const resposta = await api.removerDaCarteira(removendo.id);
-      const removido = removendo;
-      // Atualiza a lista na hora; "Carregar mais" continua do ponto certo porque o servidor também já não o conta.
-      setEstado((atual) =>
-        atual ? { ...atual, clientes: atual.clientes.filter((c) => c.id !== removido.id), total: Math.max(0, atual.total - 1) } : atual,
-      );
-      setRemovendo(null);
-      window.dispatchEvent(new Event(EVENTO_CARTEIRA_ALTERADA));
-      const n = resposta.reunioesComInsightsRemovidos;
-      toast({
-        titulo: "Cliente removido",
-        descricao: `${removido.nome} saiu de "Meus clientes"${n ? ` e os insights de ${n} ${n === 1 ? "reunião" : "reuniões"} foram removidos` : ""}. Os compromissos já marcados continuam na agenda.`,
-      });
-    } catch (falha) {
-      // Erro fica no modal: nada foi removido.
-      setErroRemocao(falha instanceof ErroDaApi ? falha.message : "Não foi possível remover o cliente. Tente novamente.");
-    } finally {
-      removendoAgora.current = false;
-      setOcupado(false);
-    }
-  }
 
   async function carregarMais() {
     if (!estado) return;
@@ -176,20 +136,6 @@ export function MeusClientes() {
                   {cliente.segmento ? <span className="text-[12px] text-text-helper">{cliente.segmento}</span> : null}
                 </div>
               </div>
-              <MenuSuspenso rotulo={`Ações de ${cliente.nome}`} gatilho={<OverflowMenuVertical size={16} />} className="shrink-0">
-                {(fechar) => (
-                  <ItemMenu
-                    perigo
-                    onSelect={() => {
-                      fechar();
-                      setErroRemocao(null);
-                      setRemovendo(cliente);
-                    }}
-                  >
-                    Remover cliente
-                  </ItemMenu>
-                )}
-              </MenuSuspenso>
               <Link
                 href={linkCliente(cliente)}
                 className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[4px] border border-[#8D8D8D] px-2.5 text-[12px] font-medium text-text-primary transition-colors hover:bg-[#F2F2F2]"
@@ -221,28 +167,6 @@ export function MeusClientes() {
         </p>
       ) : null}
 
-      <ModalConfirmacao
-        aberto={Boolean(removendo)}
-        rotulo="Meus clientes"
-        titulo={`Remover ${removendo?.nome ?? "cliente"}?`}
-        rotuloConfirmar="Remover"
-        rotuloOcupado="Removendo..."
-        perigo
-        ocupado={ocupado}
-        onConfirmar={() => void remover()}
-        onCancelar={() => setRemovendo(null)}
-      >
-        <p>
-          <strong className="font-semibold">{removendo?.nome}</strong> sai de “Meus clientes” e os insights dele (sinais, evidências,
-          diagnósticos e ações sugeridas) deixam de aparecer na Central de Insights, no Dashboard, nos indicadores e nas respostas do
-          Dialys. Os compromissos já marcados continuam na agenda.
-        </p>
-        {erroRemocao ? (
-          <p role="alert" className="mt-3 text-[13px] text-support-error">
-            {erroRemocao}
-          </p>
-        ) : null}
-      </ModalConfirmacao>
     </section>
   );
 }

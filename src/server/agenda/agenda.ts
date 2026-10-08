@@ -159,3 +159,11 @@ export async function atualizarCompromisso(usuario: Usuario, id: string, entrada
   if (!atualizado) throw new ErroAgenda("COMPROMISSO_NAO_ENCONTRADO", 404, "Compromisso não encontrado.");
   return serializarCompromisso(atualizado);
 }
+
+/** Compromissos do usuário com um cliente (passados e futuros), do mais próximo de hoje para trás e para frente. */
+export async function compromissosDoCliente(usuario: Usuario, contaId: string): Promise<Compromisso[]> {
+  return (await repositorio().listar(usuario.id))
+    .filter((c) => c.contaId === contaId)
+    .sort((a, b) => a.inicio.localeCompare(b.inicio))
+    .map(serializarCompromisso);
+}

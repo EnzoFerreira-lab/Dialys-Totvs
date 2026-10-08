@@ -26,8 +26,8 @@ import { listarAnalisesConcluidas, listarReunioesSemTranscricao, type AnaliseCon
 
 export { chaveConta, nomeConta };
 
-const TIPO: Record<TipoSinalIA, TipoSinal> = { CHURN_RISK: "churn", OPPORTUNITY: "oportunidade", OBJECTION: "objecao" };
-const PRODUTO: Record<StatusProduto, ContextoProduto> = {
+export const TIPO_SINAL: Record<TipoSinalIA, TipoSinal> = { CHURN_RISK: "churn", OPPORTUNITY: "oportunidade", OBJECTION: "objecao" };
+export const CONTEXTO_PRODUTO: Record<StatusProduto, ContextoProduto> = {
   EM_USO: "em_uso",
   INTERESSE: "expansao",
   INSATISFAÇÃO: "insatisfacao",
@@ -40,9 +40,9 @@ const LIMITE_TRECHO = 360;
 const MARGEM_TRECHO = 140;
 
 const ordenarSinais = (a: SinalRegistro, b: SinalRegistro) =>
-  PRIORIDADE_SINAL[TIPO[a.tipo]] - PRIORIDADE_SINAL[TIPO[b.tipo]] || PESO_SEVERIDADE[a.severidade] - PESO_SEVERIDADE[b.severidade];
+  PRIORIDADE_SINAL[TIPO_SINAL[a.tipo]] - PRIORIDADE_SINAL[TIPO_SINAL[b.tipo]] || PESO_SEVERIDADE[a.severidade] - PESO_SEVERIDADE[b.severidade];
 
-const paraSinal = (sinal: SinalRegistro): Sinal => ({ tipo: TIPO[sinal.tipo], urgencia: sinal.severidade === "ALTA" ? "alta" : "media" });
+const paraSinal = (sinal: SinalRegistro): Sinal => ({ tipo: TIPO_SINAL[sinal.tipo], urgencia: sinal.severidade === "ALTA" ? "alta" : "media" });
 
 /** "[LOCUTOR 2]" → "Locutor 2"; "Cliente (Diretor)" fica como está. */
 function formatarFalante(bruto: string) {
@@ -89,7 +89,7 @@ export function montarEvidencias(transcricao: string, sinais: SinalRegistro[]): 
         // O trecho real da transcrição (não a citação do modelo, que pode diferir em espaços ou acentos).
         destaques: daFala.map((s) => ({
           trecho: transcricao.slice(s.posicaoCaracterStart, s.posicaoCaracterEnd),
-          tipo: TIPO[s.tipo],
+          tipo: TIPO_SINAL[s.tipo],
           urgencia: paraSinal(s).urgencia,
         })),
       };
@@ -107,11 +107,11 @@ function montarConta(chave: string, analisesRecebidas: AnaliseConcluida[], reuni
   const sinais = [...resultado.analise.sinais].sort(ordenarSinais);
 
   const porTipo = new Map<TipoSinal, Sinal>();
-  for (const sinal of sinais) if (!porTipo.has(TIPO[sinal.tipo])) porTipo.set(TIPO[sinal.tipo], paraSinal(sinal));
+  for (const sinal of sinais) if (!porTipo.has(TIPO_SINAL[sinal.tipo])) porTipo.set(TIPO_SINAL[sinal.tipo], paraSinal(sinal));
 
   const produtos = new Map<string, MencaoProduto>();
   for (const mencao of resultado.analise.mencoesProdutos) {
-    const contexto = PRODUTO[mencao.status];
+    const contexto = CONTEXTO_PRODUTO[mencao.status];
     produtos.set(`${contexto}-${mencao.produto}`, { contexto, nome: mencao.produto, descricao: mencao.contexto });
   }
 

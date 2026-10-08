@@ -10,6 +10,7 @@ import {
   Tag,
   WarningFilled,
 } from "@carbon/icons-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -206,7 +207,13 @@ const EXTENSOES_ANALISAVEIS = [".txt"];
 export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComposerProps) {
   const [texto, setTexto] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [conta, setConta] = useState<ContaResumo | null>(null);
+  // Vindo da ficha do cliente (?conta=&nome=), o cliente já vem escolhido. O servidor valida o id ao enviar.
+  const parametros = useSearchParams();
+  const [conta, setConta] = useState<ContaResumo | null>(() => {
+    const id = parametros.get("conta");
+    const nome = parametros.get("nome");
+    return id && nome && /^[\w.-]{1,60}$/.test(id) ? { id, nome: nome.slice(0, 120) } : null;
+  });
   const [erro, setErro] = useState<string | null>(null);
   const [arrastando, setArrastando] = useState(false);
   const [contexto, setContexto] = useState<ContextoReuniao | null>(null);

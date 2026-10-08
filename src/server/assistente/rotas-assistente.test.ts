@@ -51,7 +51,7 @@ describe("POST /api/v1/assistente/mensagens", () => {
     const corpo = await resposta.json();
     expect(corpo.conversaId).toMatch(/^cnv_/);
     expect(corpo.resposta).toMatchObject({ papel: "assistente", modo: "demonstracao" });
-    expect(corpo.resposta.fontes[0]).toMatchObject({ link: "/insights?conta=conta-grupo-horizonte" });
+    expect(corpo.resposta.fontes[0]).toMatchObject({ link: "/contas/conta-grupo-horizonte" });
     // A auditoria interna das consultas não sai para o navegador.
     expect(corpo.resposta.consultas).toBeUndefined();
 

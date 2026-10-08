@@ -3,6 +3,7 @@
 import { ArrowRight, Calendar } from "@carbon/icons-react";
 import Link from "next/link";
 import { ROTULO_STATUS } from "@/lib/agenda";
+import { linkCliente } from "@/lib/alertas";
 import type { ListaAgendaApi } from "@/lib/api-cliente";
 import { cn } from "@/lib/cn";
 import { horaNoFuso } from "@/lib/fuso";
@@ -31,7 +32,13 @@ export function CompromissosHoje({ agenda }: { agenda: ListaAgendaApi }) {
               <div className="min-w-0 flex-1">
                 <p className={cn("text-[13px] leading-5 font-medium text-text-primary", c.status === "cancelado" && "text-text-helper line-through")}>{c.titulo}</p>
                 <p className="text-[12px] text-text-secondary">
-                  {c.cliente ? c.cliente.nome : "Interno"}
+                  {c.cliente ? (
+                    <Link href={linkCliente(c.cliente.id)} className="hover:underline">
+                      {c.cliente.nome}
+                    </Link>
+                  ) : (
+                    "Interno"
+                  )}
                   {c.status !== "agendado" ? ` · ${ROTULO_STATUS[c.status]}` : ""}
                 </p>
                 {c.status === "agendado" ? (

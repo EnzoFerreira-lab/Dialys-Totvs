@@ -52,5 +52,8 @@ export function paraAlerta(insight: InsightApi): Alerta {
 
 export const linkConta = (contaId: string) => `/insights?conta=${encodeURIComponent(contaId)}`;
 
+/** A ficha do cliente na aba Clientes. */
+export const linkCliente = (contaId: string) => `/contas/${encodeURIComponent(contaId)}`;
+
 /** A reunião na Central de Insights (cada linha da Central é uma reunião). */
 export const linkReuniao = (reuniaoId: string) => `/insights?reuniao=${encodeURIComponent(reuniaoId)}`;

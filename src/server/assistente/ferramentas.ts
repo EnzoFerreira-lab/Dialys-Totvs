@@ -65,7 +65,7 @@ function procedencia(analise: AnaliseConcluida) {
   return { analisePorRegras: analise.resultado.auditoria.modo === "demonstracao" };
 }
 
-const linkConta = (contaId: string) => `/insights?conta=${encodeURIComponent(contaId)}`;
+const linkConta = (contaId: string) => `/contas/${encodeURIComponent(contaId)}`;
 const linkReuniao = (reuniaoId: string) => `/insights?reuniao=${encodeURIComponent(reuniaoId)}`;
 const CATEGORIA = { CHURN_RISK: "risco_churn", OPPORTUNITY: "oportunidade", OBJECTION: "objecao" } as const;
 const PALAVRAS_GENERICAS = new Set(["grupo", "cliente", "empresa", "ltda", "s/a", "sa", "de", "da", "do", "das", "dos", "e", "the"]);

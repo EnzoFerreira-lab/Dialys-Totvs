@@ -1,7 +1,7 @@
 import { ArrowRight, Calendar } from "@carbon/icons-react";
 import Link from "next/link";
 import { SignalTag, type SignalVariant } from "@/components/sinais/signal-tag";
-import { linkReuniao } from "@/lib/alertas";
+import { linkCliente, linkReuniao } from "@/lib/alertas";
 import type { ResumoCarteira } from "@/lib/api-cliente";
 
 const TAG: Record<ResumoCarteira["agenda"][number]["categoria"], { variant: SignalVariant; rotulo: string }> = {
@@ -41,7 +41,11 @@ export function AcoesSugeridas({ agenda }: { agenda: ResumoCarteira["agenda"] })
                 {String(indice + 1).padStart(2, "0")}
               </span>
               <div className="min-w-0">
-                <p className="text-[14px] leading-5 font-semibold text-text-primary">{item.conta.nome}</p>
+                <p className="text-[14px] leading-5 font-semibold text-text-primary">
+                  <Link href={linkCliente(item.conta.id)} className="hover:underline">
+                    {item.conta.nome}
+                  </Link>
+                </p>
                 <SignalTag variant={TAG[item.categoria].variant} className="mt-1.5">
                   {TAG[item.categoria].rotulo}
                 </SignalTag>

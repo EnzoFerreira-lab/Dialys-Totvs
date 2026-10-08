@@ -1,5 +1,6 @@
 import { Growth, InformationFilled, Network_3, WarningAlt } from "@carbon/icons-react";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { CONTAINER_PAGINA, PageHeader } from "@/components/shell/page-header";
 import { listarExemplos } from "@/server/ai/demo/exemplos";
 import { EnvioWorkspace } from "./envio-workspace";
@@ -33,7 +34,10 @@ export default function EnvioPage() {
 
       <div className="mx-auto w-full max-w-[768px]">
         <div className="mt-9">
-          <EnvioWorkspace exemplos={exemplos} />
+          {/* O compositor lê ?conta= (vindo da ficha do cliente): useSearchParams pede Suspense. */}
+          <Suspense fallback={<div className="h-[260px] animate-pulse rounded-[12px] border border-border-subtle bg-layer-01" aria-busy="true" />}>
+            <EnvioWorkspace exemplos={exemplos} />
+          </Suspense>
         </div>
 
         <aside className="mt-8 flex gap-4 border border-border-info bg-[#F5F6F8] px-6 py-4">

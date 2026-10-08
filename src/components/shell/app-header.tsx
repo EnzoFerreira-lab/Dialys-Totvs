@@ -3,13 +3,14 @@
 import { ChevronDown, Logout } from "@carbon/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { sair } from "@/app/(auth)/login/actions";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { cn } from "@/lib/cn";
 
 const NAV_ITEMS = [
   { href: "/clientes", label: "Home" },
+  { href: "/contas", label: "Clientes" },
   { href: "/envio", label: "Envio" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/insights", label: "Central de Insights" },
@@ -84,9 +85,37 @@ function UserMenu() {
   );
 }
 
-export function AppHeader() {
-  const pathname = usePathname();
+/** Abas do menu; `pathname` null = ainda sem a rota (fallback do Suspense), nenhuma aba marcada. */
+function Abas({ pathname }: { pathname: string | null }) {
+  return (
+    <nav aria-label="Navegação principal" className="ml-4 flex min-w-0 overflow-x-auto sm:ml-[40px]">
+      {NAV_ITEMS.map((item) => {
+        const active = pathname !== null && (pathname === item.href || pathname.startsWith(`${item.href}/`));
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex shrink-0 items-center border-b-2 px-3 pt-0.5 text-[12px] whitespace-nowrap transition-colors sm:px-[18px] sm:text-[13px]",
+              active
+                ? "border-interactive bg-shell-hover font-medium text-white"
+                : "border-transparent text-shell-text-secondary hover:bg-shell-hover hover:text-white",
+            )}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
+function AbasDaRota() {
+  return <Abas pathname={usePathname()} />;
+}
+
+export function AppHeader() {
   return (
     <header className="on-shell sticky top-0 z-10 bg-shell text-shell-text print:hidden">
       <div className="flex h-12 items-stretch pr-3 pl-4 sm:pr-[30px] sm:pl-[34px]">
@@ -96,26 +125,11 @@ export function AppHeader() {
           <span className="hidden text-[16px] leading-none text-white sm:block">Dialys.</span>
         </Link>
 
-        <nav aria-label="Navegação principal" className="ml-4 flex min-w-0 overflow-x-auto sm:ml-[40px]">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex shrink-0 items-center border-b-2 px-3 pt-0.5 text-[12px] whitespace-nowrap transition-colors sm:px-[18px] sm:text-[13px]",
-                  active
-                    ? "border-interactive bg-shell-hover font-medium text-white"
-                    : "border-transparent text-shell-text-secondary hover:bg-shell-hover hover:text-white",
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* Rotas com parâmetro dinâmico (ex.: /contas/[id]) só conhecem o caminho na requisição: o menu
+            aparece sem aba marcada no pré-render e marca a aba assim que a rota é conhecida. */}
+        <Suspense fallback={<Abas pathname={null} />}>
+          <AbasDaRota />
+        </Suspense>
 
         <div className="ml-auto flex shrink-0 items-stretch">
           <UserMenu />
