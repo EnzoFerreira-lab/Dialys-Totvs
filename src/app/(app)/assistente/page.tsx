@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { PageHeader } from "@/components/shell/page-header";
+import { CONTAINER_PAGINA, PageHeader } from "@/components/shell/page-header";
 import { ChatAssistente } from "./chat-assistente";
 import { PainelAssistente } from "./painel-assistente";
 
@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "Assistente Dialys" };
 
 export default function AssistentePage() {
   return (
-    <div className="mx-auto w-full max-w-[1312px] px-4 pt-10 pb-16 sm:px-8 sm:pt-11">
+    <div className={CONTAINER_PAGINA}>
       <PageHeader
-        kicker="Inteligência conversacional"
+        pagina="Assistente Dialys"
         titulo="Assistente Dialys"
         descricao="Peça o briefing do dia para ouvi-lo em voz, ou pergunte sobre empresas, reuniões, riscos e ações sugeridas."
       />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
+import { BOTAO_ACAO_CABECALHO, CONTAINER_PAGINA, PageHeader } from "@/components/shell/page-header";
 import { usuarioDaSessao } from "@/server/auth/sessao-pagina";
 import { buscarClienteNoCadastro } from "@/server/clientes/clientes";
 import { podeAcessarConta } from "@/server/auth/usuarios";
@@ -88,36 +89,18 @@ async function InsightsDasReunioes({ searchParams }: { searchParams: ParametrosB
 
 export default function InsightsPage({ searchParams }: { searchParams: ParametrosBusca }) {
   return (
-    <div className="mx-auto w-full max-w-[1312px] px-4 pt-6 pb-10 sm:px-8 sm:pt-7">
-      <nav aria-label="Trilha de navegação" className="text-[11px] text-text-secondary print:hidden">
-        <ol className="flex items-center gap-2">
-          <li>
-            <Link href="/clientes" className="hover:text-text-primary hover:underline">
-              Home
-            </Link>
-          </li>
-          <li aria-hidden="true">/</li>
-          <li aria-current="page" className="text-text-primary">
-            Central de Insights
-          </li>
-        </ol>
-      </nav>
-
-      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between print:hidden">
-        <header>
-          <h1 className="text-[28px] leading-9 font-normal text-text-primary sm:text-[32px] sm:leading-10">Central de Insights</h1>
-          <p className="mt-1 text-[14px] leading-[1.6] text-text-secondary">
-            Da conversa à ação: explore as análises e os próximos passos de cada reunião.
-          </p>
-        </header>
-        <Link
-          href="/envio"
-          className="inline-flex h-10 shrink-0 items-center gap-6 self-start border border-[#8D8D8D] bg-layer-01 px-4 text-[13px] font-medium text-text-primary transition-colors hover:bg-[#F2F2F2] sm:self-auto"
-        >
-          Enviar nova reunião
-          <ArrowRight size={16} aria-hidden="true" />
-        </Link>
-      </div>
+    <div className={CONTAINER_PAGINA}>
+      <PageHeader
+        pagina="Central de Insights"
+        titulo="Central de Insights"
+        descricao="Da conversa à ação: explore as análises e os próximos passos de cada reunião."
+        acoes={
+          <Link href="/envio" className={BOTAO_ACAO_CABECALHO}>
+            Enviar nova reunião
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        }
+      />
 
       <Suspense fallback={<CarregandoInsights />}>
         <InsightsDasReunioes searchParams={searchParams} />

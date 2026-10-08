@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { CONTAINER_PAGINA, PageHeader } from "@/components/shell/page-header";
 import { dataNoFuso, horaNoFuso, rotuloDia } from "@/lib/fuso";
 import { usuarioDaSessao } from "@/server/auth/sessao-pagina";
 import { fusoHorario } from "@/server/config/dados";
@@ -40,12 +41,10 @@ async function MeuDia() {
 
   return (
     <>
-      <header>
-        <h1 className="text-[28px] leading-9 font-normal text-text-primary sm:text-[32px] sm:leading-10">Home</h1>
-        <p className="mt-1 text-[15px] text-text-secondary">
-          {saudacao(Number(horaNoFuso(agora, fuso).slice(0, 2)))}, {primeiroNome}. Hoje é {rotuloDia(hoje, "longo")}.
-        </p>
-      </header>
+      <PageHeader
+        titulo="Home"
+        descricao={`${saudacao(Number(horaNoFuso(agora, fuso).slice(0, 2)))}, ${primeiroNome}. Hoje é ${rotuloDia(hoje, "longo")}.`}
+      />
       {/* Agenda em destaque; no celular e em telas médias os blocos se empilham (agenda primeiro). */}
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <MinhaAgenda hojeInicial={hoje} fuso={fuso} />
@@ -57,7 +56,7 @@ async function MeuDia() {
 
 export default function HomePage() {
   return (
-    <div className="mx-auto w-full max-w-[1312px] px-4 pt-8 pb-16 sm:px-8 sm:pt-10">
+    <div className={CONTAINER_PAGINA}>
       <Suspense fallback={<Carregando />}>
         <MeuDia />
       </Suspense>
