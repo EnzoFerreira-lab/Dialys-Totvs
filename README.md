@@ -35,9 +35,11 @@ O `/envio` aceita só texto: colado, arquivo `.txt` ou o JSON exportado pela TOT
 
 ## Rotas
 
+Menu, do geral para o detalhe: **Home · Dashboard · Clientes · Central de Insights · Assistente Dialys**. O Envio não é aba: é o botão **+ Enviar reunião** à direita do menu (no celular, só o "+"), além dos atalhos nas páginas.
+
 | Rota | Tela |
 |---|---|
-| `/login` | Login enterprise (piloto: qualquer credencial entra) |
+| `/login` | Login enterprise (piloto: qualquer credencial entra). **Esqueceu a senha?** abre a recuperação em 3 etapas: e-mail → código de 6 dígitos (validade de 10 min, 5 tentativas, reenvio após 30 s, resposta que não revela se o e-mail existe) → nova senha (8+ caracteres, letras e números, confirmação). Tudo é conferido no servidor ([src/server/auth/recuperacao.ts](src/server/auth/recuperacao.ts)); o **envio do e-mail é simulado**: a janela mostra a prévia do e-mail com o código, identificada como simulação, e a senha nova não é gravada (o piloto não verifica senhas até o IdP corporativo, T02) |
 | `/clientes` | **Home** (início após o login; a rota continua `/clientes`): saudação, **Minha agenda** (semana no computador, lista do dia no celular, criar/editar/cancelar compromissos) e **Meus clientes** (lista compacta com busca e "Ver cliente", que abre a ficha na aba Clientes) |
 | `/contas` | **Clientes**: todos os clientes unificados (uma linha por cliente, juntando todas as reuniões dele), com situação e tendência da saúde, criticidade, nº de reuniões, alertas por tipo e a próxima reunião marcada. Busca, filtros (situação, com reunião marcada) e ordenação |
 | `/contas/[id]` | **Ficha do cliente**: saúde (com o cálculo e a tendência), criticidade, última reunião, próxima reunião marcada; **principais alertas** de todas as reuniões (do mais crítico, com citação, recomendação, reunião de origem e status no CRM); **todas as reuniões** com a saúde de cada uma; **agenda com o cliente** e **Marcar reunião** (mesma agenda da Home); diagnóstico, ação sugerida e próximos passos; produtos e concorrentes citados. Atalhos: Perguntar ao Dialys, Enviar reunião (já com o cliente escolhido) e cada reunião na Central |

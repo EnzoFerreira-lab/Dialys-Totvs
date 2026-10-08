@@ -27,7 +27,7 @@ export default function EnvioPage() {
     <div className={CONTAINER_PAGINA}>
       {/* Topo na mesma posição das outras abas; o formulário fica estreito e centralizado. */}
       <PageHeader
-        pagina="Envio"
+        pagina="Enviar reunião"
         titulo="Cadastrar e Analisar Reunião"
         descricao="Envie a transcrição bruta da reunião em texto ou arquivo para extração automática de sinais de negócio."
       />

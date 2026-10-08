@@ -1,17 +1,23 @@
 "use client";
 
-import { ArrowRight, Locked, Security, View, ViewOff } from "@carbon/icons-react";
+import { ArrowRight, CheckmarkFilled, Locked, Security, View, ViewOff } from "@carbon/icons-react";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/text-input";
 import { entrar } from "./actions";
+import { RecuperarSenha } from "./recuperar-senha";
 
 export function LoginForm() {
   // ?volta=/assistente: depois de entrar, volta para a página que pediu a sessão.
   const volta = useSearchParams().get("volta") ?? "";
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [recuperando, setRecuperando] = useState(false);
+  const [emailDigitado, setEmailDigitado] = useState("");
+  const [senhaRedefinida, setSenhaRedefinida] = useState(false);
+  const campoEmail = useRef<HTMLInputElement>(null);
+  const campoSenha = useRef<HTMLInputElement>(null);
 
   return (
     <div className="w-full max-w-[332px]">
@@ -27,6 +33,13 @@ export function LoginForm() {
         para acessar o painel.
       </p>
 
+      {senhaRedefinida ? (
+        <p role="status" className="mt-6 flex items-start gap-2 border-l-[3px] border-[#24A148] bg-[#DEFBE6] px-3 py-2 text-[12px] leading-[1.5] text-text-primary">
+          <CheckmarkFilled size={16} className="mt-px shrink-0 text-[#198038]" aria-hidden="true" />
+          Senha redefinida. Entre com a nova senha.
+        </p>
+      ) : null}
+
       {/* Piloto: qualquer credencial entra; a ação cria a sessão assinada no servidor (T02 troca pelo IdP). */}
       <form className="mt-9" action={entrar} onSubmit={() => setSubmitting(true)} noValidate>
         <input type="hidden" name="volta" value={volta} />
@@ -37,6 +50,7 @@ export function LoginForm() {
           label="Usuário ou E-mail Corporativo"
           placeholder="Digite seu E-mail"
           autoComplete="username"
+          ref={campoEmail}
         />
 
         <TextInput
@@ -46,6 +60,7 @@ export function LoginForm() {
           label="Senha"
           placeholder="Digite sua senha"
           autoComplete="current-password"
+          ref={campoSenha}
           className="mt-6"
           trailing={
             <button
@@ -61,12 +76,16 @@ export function LoginForm() {
         />
 
         <div className="mt-3 flex justify-end">
-          <a
-            href="#"
+          <button
+            type="button"
+            onClick={() => {
+              setEmailDigitado(campoEmail.current?.value ?? "");
+              setRecuperando(true);
+            }}
             className="text-[12px] leading-4 text-text-primary underline underline-offset-[3px] hover:text-text-secondary"
           >
             Esqueceu a senha?
-          </a>
+          </button>
         </div>
 
         <label className="mt-5 flex cursor-pointer items-center gap-2.5 text-[12px] text-text-secondary">
@@ -87,6 +106,20 @@ export function LoginForm() {
           <ArrowRight size={16} aria-hidden="true" />
         </Button>
       </form>
+
+      <RecuperarSenha
+        aberto={recuperando}
+        emailInicial={emailDigitado}
+        onFechar={() => setRecuperando(false)}
+        onConcluido={(email) => {
+          setRecuperando(false);
+          setSenhaRedefinida(true);
+          if (campoEmail.current) campoEmail.current.value = email;
+          if (campoSenha.current) campoSenha.current.value = "";
+          // Depois que a janela fecha, o foco vai para a senha.
+          window.setTimeout(() => campoSenha.current?.focus(), 0);
+        }}
+      />
 
       <div className="mt-6 border-t border-[#C6C6C6] pt-4">
         <p className="flex items-center justify-center gap-2 text-[11px] text-text-secondary">

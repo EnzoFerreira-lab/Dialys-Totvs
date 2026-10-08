@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Logout } from "@carbon/icons-react";
+import { Add, ChevronDown, Logout } from "@carbon/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -8,14 +8,32 @@ import { sair } from "@/app/(auth)/login/actions";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { cn } from "@/lib/cn";
 
+// Do geral para o detalhe: o dia (Home) → a carteira (Dashboard) → um cliente → uma reunião → o assistente.
+// O Envio é uma ação, não um lugar: fica como botão à direita (EnviarReuniao), não entre as abas.
 const NAV_ITEMS = [
   { href: "/clientes", label: "Home" },
-  { href: "/contas", label: "Clientes" },
-  { href: "/envio", label: "Envio" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/contas", label: "Clientes" },
   { href: "/insights", label: "Central de Insights" },
   { href: "/assistente", label: "Assistente Dialys" },
 ] as const;
+
+/** Atalho fixo para o Envio, em destaque. No celular, só o ícone. */
+function EnviarReuniao() {
+  return (
+    <div className="flex items-center pr-2 sm:pr-4">
+      <Link
+        href="/envio"
+        aria-label="Enviar reunião"
+        title="Enviar reunião para análise"
+        className="inline-flex h-8 items-center gap-1.5 rounded-[4px] bg-interactive px-2 text-[13px] font-medium whitespace-nowrap text-on-interactive transition-colors hover:bg-interactive-hover active:bg-interactive-active sm:px-3"
+      >
+        <Add size={16} aria-hidden="true" />
+        <span className="hidden sm:inline">Enviar reunião</span>
+      </Link>
+    </div>
+  );
+}
 
 // Piloto: usuário fixo da persona até a autenticação real (T02).
 const USUARIO = { nome: "Ricardo Alves", cargo: "Diretor Comercial", iniciais: "RA" };
@@ -132,6 +150,7 @@ export function AppHeader() {
         </Suspense>
 
         <div className="ml-auto flex shrink-0 items-stretch">
+          <EnviarReuniao />
           <UserMenu />
         </div>
       </div>

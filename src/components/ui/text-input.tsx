@@ -1,7 +1,9 @@
-import type { InputHTMLAttributes, ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode, Ref } from "react";
 import { cn } from "@/lib/cn";
 
 type TextInputProps = InputHTMLAttributes<HTMLInputElement> & {
+  /** React 19: ref é uma prop comum e vai direto para o <input>. */
+  ref?: Ref<HTMLInputElement>;
   id: string;
   label: string;
   /** Elemento à direita dentro do campo (ex.: botão de exibir senha). */
