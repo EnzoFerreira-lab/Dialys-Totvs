@@ -1,12 +1,12 @@
-// POST /api/v1/reunioes/processar: recebe uma reunião (texto, .txt, JSON da TOTVS ou áudio) e aciona o pipeline.
-//   padrão               202 Accepted + reunião EM_PROCESSAMENTO; as etapas 2 a 5 rodam depois da resposta
+// POST /api/v1/reunioes/processar: recebe uma reunião (texto, .txt ou JSON da TOTVS) e aciona o pipeline.
+//   padrão               202 Accepted + reunião EM_PROCESSAMENTO; as etapas 2 a 4 rodam depois da resposta
 //                        e o cliente acompanha em GET /api/v1/reunioes/{id} (header Location).
 //   ?modo=sincrono       espera o pipeline terminar: 201 com o resultado, ou o status HTTP da falha.
 import { after } from "next/server";
 import { lerEntrada } from "@/server/api/entrada-reuniao";
 import { comTratamento, erro, json, linkReuniao, serializarReuniao } from "@/server/api/http";
 import { buscarResultado } from "@/server/db/repositorio";
-import { ErroEntrada, processarReuniao, receberReuniao } from "@/server/pipeline/processar-reuniao";
+import { ErroEntrada, agendarProcessamento, processarReuniao, receberReuniao } from "@/server/pipeline/processar-reuniao";
 
 /** Análise com o Claude leva de 30 s a 2 min; o modo síncrono precisa da margem. */
 export const maxDuration = 300;
@@ -31,6 +31,8 @@ export async function POST(request: Request) {
 
     if (modo === "assincrono") {
       const id = reuniao.id;
+      // Registrado antes da resposta: se o after() não rodar, a consulta percebe e retoma (ver consultarReuniao).
+      agendarProcessamento(id);
       after(() => processarReuniao(id, entrada));
       return json(serializarReuniao(reuniao, null), 202, requestId, { Location: linkReuniao(id) });
     }

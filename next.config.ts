@@ -8,10 +8,9 @@ const nextConfig: NextConfig = {
   redirects() {
     return [{ source: "/jarvis", destination: "/assistente", permanent: true }];
   },
-  // Cenários do modo demonstração são lidos do disco em tempo de execução.
+  // A amostra de reuniões da TOTVS (menu Exemplo) é lida do disco em tempo de execução.
   outputFileTracingIncludes: {
-    "/envio": ["./data/demo/**/*"],
-    "/api/v1/reunioes/processar": ["./data/demo/**/*"],
+    "/envio": ["./data/exemplos/**/*"],
   },
   turbopack: {
     root: __dirname,

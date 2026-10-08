@@ -98,7 +98,7 @@ function reuniaoInicial(todas: ReuniaoCentral[], reuniaoId: string | null, conta
   return null;
 }
 
-export function CentralInsights({ reunioes: todas, modoDemonstracao = false }: { reunioes: ReuniaoCentral[]; modoDemonstracao?: boolean }) {
+export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -511,9 +511,7 @@ export function CentralInsights({ reunioes: todas, modoDemonstracao = false }: {
             </div>
           </section>
           <p className="mt-2 px-1 text-[11px] leading-4 text-text-helper">
-            {modoDemonstracao
-              ? "Análises geradas em modo demonstração (sem IA). Cada linha é uma reunião enviada; o código não muda ao ordenar, filtrar ou remover."
-              : "Cada linha é uma reunião enviada e analisada pelo Claude; o código não muda ao ordenar, filtrar ou remover."}
+            Cada linha é uma reunião enviada e analisada; o código não muda ao ordenar, filtrar ou remover.
           </p>
         </div>
 

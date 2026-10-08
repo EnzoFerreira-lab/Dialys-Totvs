@@ -249,8 +249,8 @@ export function DetalheConta({ conta, reuniao, sincronizando, erroCrm, onSincron
         {/* Diagnóstico e recomendação */}
         <Secao
           id={ids.diagnostico}
-          titulo="Diagnóstico e recomendação de IA"
-          acao={<AiGenerate size={18} className="mr-2 text-text-secondary" aria-label="Gerado por IA" />}
+          titulo={conta.geradoPorIa ? "Diagnóstico e recomendação de IA" : "Diagnóstico e recomendação"}
+          acao={conta.geradoPorIa ? <AiGenerate size={18} className="mr-2 text-text-secondary" aria-label="Gerado por IA" /> : null}
         >
           <div className="grid md:grid-cols-2">
             <div className="px-4 py-4">
@@ -273,7 +273,8 @@ export function DetalheConta({ conta, reuniao, sincronizando, erroCrm, onSincron
             </div>
           ) : null}
           <p className="border-t border-border-subtle px-4 py-2 text-[11px] text-text-helper">
-            Gerado por IA a partir da {reuniao.codigo} (data {dataReuniao}). Revise antes de agir.
+            {conta.geradoPorIa ? "Gerado por IA" : "Gerado automaticamente"} a partir da {reuniao.codigo} (data {dataReuniao}). Revise antes de
+            agir.
           </p>
         </Secao>
 

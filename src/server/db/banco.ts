@@ -42,14 +42,16 @@ export type ReuniaoRegistro = {
   criadaEm: string;
   atualizadaEm: string;
   status: StatusReuniao;
-  origem: "texto" | "arquivo_texto" | "audio";
+  origem: "texto" | "arquivo_texto";
   nomeArquivo?: string;
   contaId?: string;
   /** Nome da empresa informado no envio (a Central de Insights agrupa e exibe por ele). */
   contaNome?: string;
   contexto?: ContextoReuniao;
-  /** null enquanto um áudio não foi transcrito. */
+  /** Texto analisado (null só em registros antigos de áudio, que não existem mais). */
   transcricao: string | null;
+  /** Quantas vezes a análise foi retomada depois de o servidor parar no meio. */
+  retomadas?: number;
   etapas: Etapa[];
   analiseId?: string;
   falha?: FalhaRegistrada;
@@ -57,10 +59,15 @@ export type ReuniaoRegistro = {
    * Remoção lógica da transcrição (Central de Insights). O registro, o número e o texto continuam no
    * banco, mas a transcrição e a análise derivada só dela saem de todas as consultas ativas.
    */
-  transcricaoRemovida?: { em: string; usuarioId: string };
+  transcricaoRemovida?: {
+    em: string;
+    usuarioId: string;
+    /** "cliente_removido": saiu junto com o cliente ("Remover cliente"); some também da Central. Ausente = "transcricao". */
+    motivo?: "transcricao" | "cliente_removido";
+  };
 };
 
-/** Cliente que um usuário tirou da própria carteira. Não apaga o cliente nem o histórico dele. */
+/** Cliente que um usuário tirou da própria carteira. Os insights dele saem junto (remoção lógica nas reuniões). */
 export type CarteiraRemocaoRegistro = { usuarioId: string; contaId: string; removidoEm: string };
 
 export type AnaliseRegistro = {
@@ -138,7 +145,7 @@ export type CompromissoRegistro = {
   local: string | null;
   observacoes: string | null;
   /** "demonstracao": criado pela semente fictícia; "usuario": cadastrado na tela. */
-  origem: "demonstracao" | "usuario";
+  origem: "usuario";
   criadoEm: string;
   atualizadoEm: string;
 };

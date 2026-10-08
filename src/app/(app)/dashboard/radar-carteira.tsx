@@ -1,4 +1,4 @@
-import { ArrowRight, Building, InformationFilled, Radar, UserMultiple, WarningAlt } from "@carbon/icons-react";
+import { ArrowRight, Building, Radar, UserMultiple, WarningAlt } from "@carbon/icons-react";
 import Link from "next/link";
 import { linkReuniao } from "@/lib/alertas";
 import type { ResumoCarteira } from "@/lib/api-cliente";
@@ -87,37 +87,44 @@ export function RadarCarteira({ resumo }: { resumo: ResumoCarteira }) {
   );
 }
 
-/** Equipe e carteira do usuário (configuração do piloto) e quanto da carteira já passou pelo Dialys. */
+/** Equipe e carteira do usuário (quando configuradas) e quantas contas já passaram pelo Dialys. */
 export function OperacaoComercial({ resumo }: { resumo: ResumoCarteira }) {
   const { vendedores, contasSobGestao } = resumo.operacao;
   const analisadas = resumo.kpis.contasAnalisadas;
-  const cobertura = Math.min(100, Math.round((analisadas / contasSobGestao) * 100));
+  const cobertura = contasSobGestao ? Math.min(100, Math.round((analisadas / contasSobGestao) * 100)) : null;
 
   return (
-    <div>
-      <section aria-labelledby="titulo-operacao" className="rounded-[8px] border border-border-subtle bg-layer-01 p-5">
-        <h2 id="titulo-operacao" className="text-[15px] leading-5 font-semibold text-text-primary">
-          Sua operação comercial
-        </h2>
+    <section aria-labelledby="titulo-operacao" className="rounded-[8px] border border-border-subtle bg-layer-01 p-5">
+      <h2 id="titulo-operacao" className="text-[15px] leading-5 font-semibold text-text-primary">
+        Sua operação comercial
+      </h2>
+      {vendedores || contasSobGestao ? (
         <dl className="mt-4 grid grid-cols-2 gap-4">
-          <div className="flex flex-col">
-            <UserMultiple size={20} className="text-text-helper" aria-hidden="true" />
-            <dt className="order-last text-[12px] text-text-secondary">vendedores</dt>
-            <dd className="mt-1.5 text-[22px] leading-7 font-normal text-text-primary tabular-nums">{vendedores}</dd>
-          </div>
-          <div className="flex flex-col">
-            <Building size={20} className="text-text-helper" aria-hidden="true" />
-            <dt className="order-last text-[12px] text-text-secondary">contas sob gestão</dt>
-            <dd className="mt-1.5 text-[22px] leading-7 font-normal text-text-primary tabular-nums">{contasSobGestao}+</dd>
-          </div>
+          {vendedores ? (
+            <div className="flex flex-col">
+              <UserMultiple size={20} className="text-text-helper" aria-hidden="true" />
+              <dt className="order-last text-[12px] text-text-secondary">vendedores</dt>
+              <dd className="mt-1.5 text-[22px] leading-7 font-normal text-text-primary tabular-nums">{vendedores}</dd>
+            </div>
+          ) : null}
+          {contasSobGestao ? (
+            <div className="flex flex-col">
+              <Building size={20} className="text-text-helper" aria-hidden="true" />
+              <dt className="order-last text-[12px] text-text-secondary">contas sob gestão</dt>
+              <dd className="mt-1.5 text-[22px] leading-7 font-normal text-text-primary tabular-nums">{contasSobGestao}</dd>
+            </div>
+          ) : null}
         </dl>
-        <div className="mt-4 border-t border-border-subtle pt-3">
-          <p className="flex justify-between text-[12px] text-text-secondary">
-            <span>Contas com reunião analisada</span>
-            <span className="font-semibold text-text-primary tabular-nums">
-              {analisadas} ({cobertura}%)
-            </span>
-          </p>
+      ) : null}
+      <div className={vendedores || contasSobGestao ? "mt-4 border-t border-border-subtle pt-3" : "mt-3"}>
+        <p className="flex justify-between text-[12px] text-text-secondary">
+          <span>Contas com reunião analisada</span>
+          <span className="font-semibold text-text-primary tabular-nums">
+            {analisadas}
+            {cobertura !== null ? ` (${cobertura}%)` : ""}
+          </span>
+        </p>
+        {cobertura !== null ? (
           <div
             className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#E0E0E0]"
             role="progressbar"
@@ -128,15 +135,8 @@ export function OperacaoComercial({ resumo }: { resumo: ResumoCarteira }) {
           >
             <span className="block h-full bg-interactive" style={{ width: `${Math.max(cobertura, analisadas > 0 ? 2 : 0)}%` }} />
           </div>
-        </div>
-      </section>
-      <p className="mt-3 flex gap-2 px-1 text-[11px] leading-4 text-text-helper">
-        <InformationFilled size={14} className="mt-px shrink-0" aria-hidden="true" />
-        <span>
-          Equipe e carteira: dados ilustrativos para demonstração, não conectados à operação real. Os demais números vêm
-          das reuniões analisadas.
-        </span>
-      </p>
-    </div>
+        ) : null}
+      </div>
+    </section>
   );
 }

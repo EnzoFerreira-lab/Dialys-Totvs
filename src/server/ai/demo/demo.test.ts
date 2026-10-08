@@ -3,47 +3,7 @@ import { TRANSCRICAO_TESTE } from "../__fixtures__/reuniao-teste";
 import { validarEvidencias } from "../validar-evidencia";
 import { analisarReuniaoDemo } from "./analisar-reuniao-demo";
 import { lerAmostraTotvs } from "./amostra-totvs";
-import { escolherCenario, lerCenarios } from "./cenarios";
 import { analisarPorRegras, papeisDosLocutores } from "./heuristica";
-
-const { cenarios, erros } = lerCenarios();
-
-// Protege a apresentação: um JSON quebrado ou com citação inexistente falha aqui, não na frente da TOTVS.
-describe("cenários de data/demo/cenarios", () => {
-  it("todos os arquivos são válidos", () => {
-    expect(erros).toEqual([]);
-    expect(cenarios.length).toBeGreaterThan(0);
-  });
-
-  it.each(cenarios.map((cenario) => [cenario.id, cenario] as const))(
-    "%s: toda citação existe literalmente na transcrição",
-    (_id, cenario) => {
-      const { sinaisDescartados } = validarEvidencias(cenario.transcricao, cenario.analise.sinais);
-      expect(sinaisDescartados.map((d) => d.sinal.citacaoExata)).toEqual([]);
-    },
-  );
-
-  it("ids são únicos", () => {
-    const ids = cenarios.map((cenario) => cenario.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-});
-
-describe("escolherCenario", () => {
-  it("reconhece a transcrição de um cenário mesmo com espaços extras", () => {
-    const [primeiro] = cenarios;
-    expect(escolherCenario(`  ${primeiro.transcricao.replace(/\n/g, "\n\n")}  `, cenarios)?.id).toBe(primeiro.id);
-  });
-
-  it("reconhece um cenário por citações presentes no texto", () => {
-    const texto = "Cliente: Se o suporte continuar demorando assim, a diretoria vai rever o contrato na renovação de dezembro.";
-    expect(escolherCenario(texto, cenarios)?.id).toBe("metalurgica-vale-forte");
-  });
-
-  it("devolve null para texto sem relação com os cenários", () => {
-    expect(escolherCenario("Cliente: Tudo certo por aqui, obrigado.", cenarios)).toBeNull();
-  });
-});
 
 describe("analisarPorRegras", () => {
   it("extrai da frase de teste churn, oportunidade e produtos, só com falas do cliente", () => {
@@ -66,23 +26,11 @@ describe("analisarPorRegras", () => {
   });
 });
 
-describe("analisarReuniaoDemo", () => {
-  it("usa o cenário quando a transcrição corresponde, sem custo e marcado como demonstração", async () => {
-    const cenario = cenarios.find((c) => c.id === "grupo-horizonte")!;
-    const { analise, evidencias, auditoria } = await analisarReuniaoDemo(cenario.transcricao, { atrasoMs: 0 });
-
-    expect(auditoria).toMatchObject({ modo: "demonstracao", custoEstimadoUsd: 0, origem: 'cenário "grupo-horizonte"' });
-    expect(analise.resumoExecutivo).toBe(cenario.analise.resumoExecutivo);
-    expect(evidencias.metricas.descartados).toBe(0);
-    for (const sinal of analise.sinais) {
-      expect(cenario.transcricao.slice(sinal.posicaoCaracterStart, sinal.posicaoCaracterEnd)).toBe(sinal.citacaoExata);
-    }
-  });
-
+describe("analisarReuniaoDemo (regras locais)", () => {
   it("cai nas regras locais para texto desconhecido", async () => {
     const { auditoria, analise } = await analisarReuniaoDemo(
       "Cliente (CFO): O preço ficou muito caro e não temos orçamento este ano.",
-      { atrasoMs: 0, cenarios },
+      { atrasoMs: 0 },
     );
     expect(auditoria.origem).toBe("regras locais");
     expect(analise.sinais[0]).toMatchObject({ tipo: "OBJECTION", subtipo: "Orçamento" });
@@ -91,7 +39,6 @@ describe("analisarReuniaoDemo", () => {
   it("usa os metadados da reunião no resumo e nos próximos passos", async () => {
     const { analise } = await analisarReuniaoDemo("Cliente (CFO): Tudo certo por aqui, obrigado pela visita.", {
       atrasoMs: 0,
-      cenarios,
       contexto: { segmento: "Serviços", uf: "SP", nps: 5 },
     });
     expect(analise.resumoExecutivo).toMatch(/^Reunião com cliente de Serviços \(SP\), NPS 5 \(detrator\)/);
@@ -100,7 +47,7 @@ describe("analisarReuniaoDemo", () => {
 });
 
 // Amostra real enviada pela TOTVS (reuniões anonimizadas, locutores sem papel, erros de transcrição).
-describe("amostra TOTVS (data/demo/totvs)", () => {
+describe("amostra TOTVS (data/exemplos/totvs)", () => {
   const reunioes = lerAmostraTotvs();
   const porId = (id: string) => {
     const reuniao = reunioes.find((r) => r.id === id);

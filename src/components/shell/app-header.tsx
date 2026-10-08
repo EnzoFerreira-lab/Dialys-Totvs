@@ -84,8 +84,7 @@ function UserMenu() {
   );
 }
 
-/** `modoDemonstracao`: a análise roda simulada (DIALYS_MODO_DEMO), sem chamar a IA. */
-export function AppHeader({ modoDemonstracao = false }: { modoDemonstracao?: boolean }) {
+export function AppHeader() {
   const pathname = usePathname();
 
   return (
@@ -119,15 +118,6 @@ export function AppHeader({ modoDemonstracao = false }: { modoDemonstracao?: boo
         </nav>
 
         <div className="ml-auto flex shrink-0 items-stretch">
-          {modoDemonstracao ? (
-            <span
-              className="mr-4 hidden items-center gap-2 text-[12px] text-shell-text-secondary md:flex"
-              title="As análises são simuladas por cenários e regras locais, sem chamar a IA (DIALYS_MODO_DEMO=true)."
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-interactive" aria-hidden="true" />
-              Ambiente demonstrativo
-            </span>
-          ) : null}
           <UserMenu />
         </div>
       </div>

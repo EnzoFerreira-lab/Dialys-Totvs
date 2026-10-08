@@ -26,7 +26,7 @@ export type ContextoReuniao = z.infer<typeof ContextoReuniaoSchema>;
 /** Item do menu Exemplo (sem o texto, que é carregado ao escolher). */
 export type ExemploResumo = { id: string; titulo: string; descricao?: string; grupo: string };
 
-export type ExemploCompleto = { transcricao: string; contexto?: ContextoReuniao; contaId?: string };
+export type ExemploCompleto = { transcricao: string; contexto?: ContextoReuniao };
 
 export type ReuniaoImportada = {
   id: string;

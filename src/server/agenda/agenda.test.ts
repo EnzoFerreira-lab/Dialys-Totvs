@@ -1,12 +1,14 @@
-// Agenda "Meu dia": fontes de demonstração e real, validação, posse e permissões (pelas rotas da API).
+// Agenda da Home: tabela compromisso do banco, validação, posse e permissões (pelas rotas da API).
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inicioDaSemana, paraInstante, somarDias } from "@/lib/fuso";
 import { COOKIE_SESSAO, criarTokenSessao } from "../auth/sessao";
+import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
-import { semearAgenda } from "./semente";
+import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
+import { receberEProcessar } from "../pipeline/processar-reuniao";
 
 vi.mock("next/server", async (original) => ({
   ...(await original<typeof import("next/server")>()),
@@ -15,7 +17,6 @@ vi.mock("next/server", async (original) => ({
 
 const { GET: listar, POST: criar } = await import("@/app/api/v1/agenda/route");
 const { GET: ler, PATCH: alterar } = await import("@/app/api/v1/agenda/[id]/route");
-const { POST: restaurar } = await import("@/app/api/v1/agenda/demonstracao/route");
 const { GET: clientes } = await import("@/app/api/v1/clientes/route");
 
 const BASE = "http://localhost:3000/api/v1";
@@ -34,7 +35,7 @@ const patchAgenda = (usuario: Usuario, id: string, corpo: unknown) =>
   alterar(new Request(`${BASE}/agenda/${id}`, { method: "PATCH", headers: cabecalhos(usuario), body: JSON.stringify(corpo) }), params(id));
 
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
-/** Um dia útil daqui a duas semanas (fora da semente), às `hora` de São Paulo. */
+/** Um dia útil daqui a duas semanas, às `hora` de São Paulo. */
 const futuro = (hora: string) => paraInstante(somarDias(inicioDaSemana(hoje()), 16), hora, FUSO).toISOString();
 const semanaAtual = () => `?de=${inicioDaSemana(hoje())}&ate=${somarDias(inicioDaSemana(hoje()), 6)}`;
 
@@ -43,49 +44,38 @@ beforeEach(async () => {
   pasta = await mkdtemp(path.join(tmpdir(), "dialys-agenda-"));
   process.env.DIALYS_BANCO_ARQUIVO = path.join(pasta, "banco.json");
   USUARIOS.push(RESTRITO);
+  // Os clientes da carteira são as contas com reunião analisada.
+  for (const [contaId, contaNome] of [
+    ["c-001", "Metalúrgica Vale Forte"],
+    ["c-002", "Rede Bom Preço Supermercados"],
+    ["c-003", "Clínica Santa Aurora"],
+  ]) {
+    await receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId, contaNome }, { motor: motorFalso() });
+  }
 });
 afterEach(async () => {
   USUARIOS.splice(USUARIOS.indexOf(RESTRITO), 1);
   delete process.env.DIALYS_BANCO_ARQUIVO;
-  delete process.env.DIALYS_DADOS_DEMONSTRACAO;
   delete process.env.DIALYS_FUSO_HORARIO;
   await rm(pasta, { recursive: true, force: true });
 });
 
-describe("semente da demonstração", () => {
-  it("cobre a semana atual e a seguinte, com clientes fictícios e compromissos internos", () => {
-    const agora = paraInstante("2026-10-07", "12:00", FUSO);
-    const semente = semearAgenda("usr_x", "2026-10-07", FUSO, agora);
-    const datas = semente.map((c) => c.inicio.slice(0, 10));
-    expect(datas.every((d) => d >= "2026-10-05" && d <= "2026-10-17")).toBe(true);
-    expect(semente.some((c) => c.contaId === null)).toBe(true);
-    expect(semente.find((c) => c.contaId === "c-001")?.contaNome).toBe("Metalúrgica Vale Forte");
-    // Passado = realizado; futuro = agendado; um cancelado de exemplo.
-    expect(semente.filter((c) => c.status === "cancelado")).toHaveLength(1);
-    for (const c of semente.filter((c) => c.status !== "cancelado")) {
-      expect(c.status).toBe(new Date(c.fim) <= agora ? "realizado" : "agendado");
-    }
-    expect(semente.every((c) => c.origem === "demonstracao" && Date.parse(c.fim) > Date.parse(c.inicio))).toBe(true);
-  });
-});
-
-describe("/api/v1/agenda (demonstração)", () => {
+describe("/api/v1/agenda", () => {
   it("sem sessão responde 401", async () => {
     expect((await getAgenda(undefined)).status).toBe(401);
     expect((await postAgenda(undefined, { titulo: "x" })).status).toBe(401);
   });
 
-  it("semeia na primeira leitura, em arquivo separado do banco, e isola por usuário", async () => {
-    const corpo = await (await getAgenda(RICARDO, semanaAtual())).json();
-    expect(corpo).toMatchObject({ modo: "demonstracao", fuso: FUSO, hoje: hoje() });
-    expect(corpo.dados.length).toBeGreaterThan(10);
-    const arquivo = JSON.parse(await readFile(path.join(pasta, "demonstracao.json"), "utf8"));
-    expect(Object.keys(arquivo.agendas)).toEqual([RICARDO.id]);
-    // Nada de exemplo no banco.
-    await expect(readFile(path.join(pasta, "banco.json"), "utf8")).rejects.toThrow();
+  it("começa vazia, grava na tabela compromisso do banco e isola por usuário", async () => {
+    const vazia = await (await getAgenda(RICARDO, semanaAtual())).json();
+    expect(vazia).toMatchObject({ fuso: FUSO, hoje: hoje(), dados: [] });
+    expect(vazia).not.toHaveProperty("modo");
+
+    const { id } = await (await postAgenda(RICARDO, { titulo: "Interno", inicio: futuro("10:00"), fim: futuro("11:00") })).json();
+    const banco = JSON.parse(await readFile(path.join(pasta, "banco.json"), "utf8"));
+    expect(banco.compromisso).toEqual([expect.objectContaining({ id, usuarioId: RICARDO.id, titulo: "Interno", origem: "usuario" })]);
 
     // Outro usuário não vê nem altera os compromissos de Ricardo.
-    const id = corpo.dados[0].id;
     expect((await ler(new Request(`${BASE}/agenda/${id}`, { headers: cabecalhos(RESTRITO) }), params(id))).status).toBe(404);
     expect((await patchAgenda(RESTRITO, id, { status: "cancelado" })).status).toBe(404);
   });
@@ -138,14 +128,6 @@ describe("/api/v1/agenda (demonstração)", () => {
     expect((await postAgenda(RESTRITO, { titulo: "x", contaId: "c-003", inicio: futuro("10:00"), fim: futuro("11:00") })).status).toBe(201);
   });
 
-  it("restaurar descarta as alterações do usuário", async () => {
-    await postAgenda(RICARDO, { titulo: "Meu compromisso", inicio: futuro("10:00"), fim: futuro("11:00") });
-    const resposta = await restaurar(new Request(`${BASE}/agenda/demonstracao`, { method: "POST", headers: cabecalhos(RICARDO) }));
-    expect(resposta.status).toBe(200);
-    const dia = futuro("00:00").slice(0, 10);
-    expect((await (await getAgenda(RICARDO, `?de=${dia}&ate=${dia}`)).json()).dados).toEqual([]);
-  });
-
   it("período inválido responde 400", async () => {
     expect((await getAgenda(RICARDO, "?de=2026-13-01")).status).toBe(400);
     expect((await getAgenda(RICARDO, "?de=2026-10-10&ate=2026-10-01")).status).toBe(400);
@@ -153,30 +135,16 @@ describe("/api/v1/agenda (demonstração)", () => {
   });
 });
 
-describe("/api/v1/agenda (dados reais)", () => {
-  it("começa vazia, grava na tabela compromisso do banco e não oferece restaurar", async () => {
-    process.env.DIALYS_DADOS_DEMONSTRACAO = "false";
-    const vazia = await (await getAgenda(RICARDO, semanaAtual())).json();
-    expect(vazia).toMatchObject({ modo: "real", dados: [] });
-
-    expect((await postAgenda(RICARDO, { titulo: "Interno", inicio: futuro("10:00"), fim: futuro("11:00") })).status).toBe(201);
-    const banco = JSON.parse(await readFile(path.join(pasta, "banco.json"), "utf8"));
-    expect(banco.compromisso).toEqual([expect.objectContaining({ usuarioId: RICARDO.id, titulo: "Interno" })]);
-    // Sem carteira real configurada, um cliente fictício não é aceito.
-    expect((await postAgenda(RICARDO, { titulo: "x", contaId: "c-001", inicio: futuro("10:00"), fim: futuro("11:00") })).status).toBe(422);
-    expect((await restaurar(new Request(`${BASE}/agenda/demonstracao`, { method: "POST", headers: cabecalhos(RICARDO) }))).status).toBe(409);
-  });
-});
-
 describe("GET /api/v1/clientes", () => {
   const getClientes = (usuario: Usuario | undefined, query = "") => clientes(new Request(`${BASE}/clientes${query}`, { headers: cabecalhos(usuario) }));
 
-  it("lista a carteira com paginação, busca sem acento e 'sem avaliação' quando não há análise", async () => {
+  it("lista a carteira (contas analisadas) com paginação, busca sem acento e a situação calculada", async () => {
     expect((await getClientes(undefined)).status).toBe(401);
-    const primeira = await (await getClientes(RICARDO, "?limite=5")).json();
-    expect(primeira).toMatchObject({ modo: "demonstracao", paginacao: { total: 16, limite: 5, offset: 0 } });
-    expect(primeira.dados).toHaveLength(5);
-    expect(primeira.dados[0]).toMatchObject({ nome: "Agro Cerrado Grãos", situacao: null });
+    const primeira = await (await getClientes(RICARDO, "?limite=2")).json();
+    expect(primeira).toMatchObject({ paginacao: { total: 3, limite: 2, offset: 0 } });
+    expect(primeira).not.toHaveProperty("modo");
+    expect(primeira.dados).toHaveLength(2);
+    expect(primeira.dados[0]).toMatchObject({ nome: "Clínica Santa Aurora", situacao: { faixa: expect.any(String) } });
 
     const busca = await (await getClientes(RICARDO, "?busca=clinica")).json();
     expect(busca.dados.map((c: { nome: string }) => c.nome)).toEqual(["Clínica Santa Aurora"]);

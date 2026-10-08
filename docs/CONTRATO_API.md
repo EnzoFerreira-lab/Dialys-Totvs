@@ -44,7 +44,7 @@ A API recebe reuniões, roda o pipeline de análise e devolve os sinais de negó
 | `400` | Entrada inválida (JSON, campos, filtros) |
 | `404` | Reunião ou insight inexistente |
 | `413` / `415` | Corpo acima de 20 MB / formato não suportado |
-| `422` | Entrada válida que não pôde ser analisada (ex.: IA recusou, STT desligado) |
+| `422` | Entrada válida que não pôde ser analisada (ex.: IA recusou) |
 | `500` / `502` / `503` | Falha interna / do provedor de IA / limite de uso da IA |
 
 **Empresa (`conta`).** Reuniões e insights trazem `conta: { id, nome }`, a empresa como aparece na Central de Insights (`/insights?conta=<id>`): a conta informada no envio, senão o código do cliente TOTVS (`codt-TB5392`), senão a própria reunião (`reuniao-reu_…`).
@@ -63,8 +63,7 @@ Toda reunião passa por 5 etapas. O estado de cada uma é gravado ao entrar e ao
 | # | Etapa (`etapas[].nome`) | O que faz |
 |---|---|---|
 | 1 | `RECEBIMENTO` | Valida e sanitiza a entrada e registra a reunião como `EM_PROCESSAMENTO` |
-| 2 | `TRANSCRICAO` | Áudio vira texto via STT com diarização (pt-BR). Para texto, a etapa fica `PULADA` |
-| 3 | `ANALISE_IA` | Claude Opus 5.5 (ou o modo demonstração) gera sinais, produtos e resumo |
+| 2 | `ANALISE_IA` | Claude Opus 5.5 (ou, sem chave, as regras locais) gera sinais, produtos e resumo |
 | 4 | `VALIDACAO_EVIDENCIAS` | Só fica o sinal cuja citação existe literalmente na transcrição; os demais são descartados e contados |
 | 5 | `PERSISTENCIA` | Grava `analise`, `sinal` e `mencao_produto` e conclui a reunião |
 
@@ -101,7 +100,7 @@ Também aceita o registro exportado pela TOTVS (`{ "ANON_TRANSCRICAO": "...", "I
 
 | Campo | Obrigatório | Conteúdo |
 |---|---|---|
-| `arquivo` | um dos dois | `.txt`, `.json` (formato TOTVS) ou áudio (`.mp3 .wav .m4a .ogg .webm`), até 20 MB |
+| `arquivo` | um dos dois | `.txt` ou `.json` (formato TOTVS), até 20 MB. Áudio não é aceito (`415 AUDIO_NAO_ACEITO`) |
 | `texto` | um dos dois | Transcrição em texto |
 | `contaId` | não | Até 60 caracteres `[A-Za-z0-9._-]` |
 | `contaNome` | não | Nome da empresa, até 120 caracteres (é o nome exibido na Central de Insights) |
@@ -156,7 +155,7 @@ curl -X POST "http://localhost:3000/api/v1/reunioes/processar?modo=sincrono" \
 | `MODO_INVALIDO` | 400 | `modo` diferente de `assincrono` ou `sincrono` |
 | `TRANSCRICAO_LONGA`, `ARQUIVO_GRANDE`, `CORPO_GRANDE` | 413 | Acima de 200 mil caracteres ou de 20 MB |
 | `TIPO_NAO_SUPORTADO`, `FORMATO_NAO_SUPORTADO` | 415 | Content-Type ou extensão não aceitos (PDF e DOCX ainda não) |
-| `STT_NAO_CONFIGURADO` | 422 | Áudio enviado, mas o STT está desligado no piloto |
+| `AUDIO_NAO_ACEITO` | 415 | Arquivo de áudio: o Dialys só recebe a transcrição em texto |
 
 ---
 
@@ -194,7 +193,6 @@ Estado do pipeline e, quando concluída, o resultado. Enquanto o status for `EM_
   "atualizadaEm": "2026-10-07T12:40:33.845Z",
   "etapas": [
     { "nome": "RECEBIMENTO", "status": "CONCLUIDA", "detalhe": "Texto recebido (840 caracteres).", "iniciadaEm": "…", "concluidaEm": "…" },
-    { "nome": "TRANSCRICAO", "status": "PULADA", "detalhe": "Entrada já em texto: STT não necessário.", "iniciadaEm": "…", "concluidaEm": "…" },
     { "nome": "ANALISE_IA", "status": "CONCLUIDA", "detalhe": "Claude (claude-opus-5-5): 4 sinal(is) proposto(s).", "iniciadaEm": "…", "concluidaEm": "…" },
     { "nome": "VALIDACAO_EVIDENCIAS", "status": "CONCLUIDA", "detalhe": "4 de 4 sinal(is) com citação literal confirmada.", "iniciadaEm": "…", "concluidaEm": "…" },
     { "nome": "PERSISTENCIA", "status": "CONCLUIDA", "detalhe": "Gravados 1 análise, 4 sinal(is) e 3 menção(ões) a produto.", "iniciadaEm": "…", "concluidaEm": "…" }
@@ -247,7 +245,7 @@ Estado do pipeline e, quando concluída, o resultado. Enquanto o status for `EM_
 }
 ```
 
-`posicaoCaracterStart`/`End` são índices (base 0, fim exclusivo) na transcrição sanitizada. No modo demonstração, `auditoria.modo` é `"demonstracao"` e tokens e custo ficam zerados.
+`posicaoCaracterStart`/`End` são índices (base 0, fim exclusivo) na transcrição sanitizada. Com as regras locais (sem chave), `auditoria.modo` é `"demonstracao"` e tokens e custo ficam zerados.
 
 **Reunião que falhou** (`200`, porque a consulta em si deu certo):
 
@@ -454,7 +452,7 @@ Ação registrada: …",
 }
 ```
 
-- `modo`: `"claude"` (resposta da IA) ou `"demonstracao"` (montada por regras a partir do banco, sem IA, quando `DIALYS_MODO_DEMO=true`); `null` no briefing.
+- `modo`: `"claude"` (resposta da IA) ou `"demonstracao"` (montada pelas regras locais a partir do banco, sem IA: sem chave ou com `DIALYS_MODO_DEMO=true`); `null` no briefing.
 - `tipo`: `"briefing"` quando a resposta é o briefing do dia (montado dos dados do usuário, sem IA); `null` nas demais. Só respostas `briefing` são lidas em voz pela tela.
 - `fala`: no briefing, o roteiro em frases `[{ texto, fala?, novoParagrafo? }]` para a síntese de voz (`fala`, quando presente, é a versão para ouvir); `null` nas demais.
 - `fontes`: empresas e reuniões que as consultas devolveram nesta resposta, não o que o texto afirma.
@@ -487,14 +485,14 @@ Toda lista informa `total` e `truncado`. Conta ou reunião fora do escopo respon
 
 Mesma sessão do assistente (`401 SESSAO_AUSENTE` sem ela). O usuário vem só da sessão. A home, a barra lateral do assistente e a consulta `consultar_agenda` usam o mesmo serviço ([src/server/agenda/agenda.ts](../src/server/agenda/agenda.ts)), então os ids são os mesmos em todo lugar.
 
-A fonte depende de `DIALYS_DADOS_DEMONSTRACAO`: em demonstração (padrão), carteira fictícia + contas analisadas e agenda fictícia em `.dialys/demonstracao.json`, por usuário; com `false`, contas analisadas e tabela `compromisso` do banco. O contrato é o mesmo, e `modo` diz qual está ativa.
+Clientes são as contas com reunião analisada (mais a base da empresa, quando ligada); a agenda fica na tabela `compromisso` do banco.
 
 ### `DELETE /api/v1/carteira/{contaId}` e `PUT /api/v1/carteira/{contaId}`
 
-"Remover cliente" da Home: `DELETE` tira o cliente **só da carteira do usuário da sessão**; `PUT` devolve. Não apaga o cliente, as reuniões, as transcrições, o histórico nem os compromissos, e não muda a carteira de outros usuários. Fica gravado na fonte ativa: `.dialys/demonstracao.json` (demonstração) ou tabela `carteira_remocao` (dados reais).
+"Remover cliente" da Home: `DELETE` tira o cliente da carteira do usuário da sessão **e remove os insights dele** (remoção lógica das reuniões do cliente, com `motivo: "cliente_removido"`): saem da Central, de `GET /insights`, de `GET /resumo`, do briefing e do assistente. Nada é apagado; os compromissos continuam. `PUT` devolve o cliente e reativa esses insights. Fica na tabela `carteira_remocao`.
 
 ```json
-{ "removido": true, "cliente": { "id": "c-001", "nome": "Metalúrgica Vale Forte" } }
+{ "removido": true, "cliente": { "id": "c-001", "nome": "Metalúrgica Vale Forte" }, "reunioesComInsightsRemovidos": 2 }
 ```
 
 Erros: `401 SESSAO_AUSENTE`, `404 CLIENTE_NAO_ENCONTRADO` (fora da carteira: inexistente, sem acesso ou já removido; mesma resposta). Depois de removido, o cliente sai de `GET /api/v1/clientes` e não pode ser usado em compromissos **novos** (`422 CLIENTE_INVALIDO`); compromissos existentes continuam com ele e podem ser editados.
@@ -509,7 +507,6 @@ Erros: `401 SESSAO_AUSENTE`, `404 CLIENTE_NAO_ENCONTRADO` (fora da carteira: ine
 
 ```json
 {
-  "modo": "demonstracao",
   "dados": [
     { "id": "c-006", "nome": "Grupo Horizonte", "segmento": "Educação", "situacao": { "faixa": "risco", "nota": 4.5 } },
     { "id": "c-004", "nome": "Agro Cerrado Grãos", "segmento": "Agronegócio", "situacao": null }
@@ -532,20 +529,20 @@ Erros: `401 SESSAO_AUSENTE`, `404 CLIENTE_NAO_ENCONTRADO` (fora da carteira: ine
   "status": "agendado",
   "local": "Escritório do cliente",
   "observacoes": null,
-  "origem": "demonstracao",
+  "origem": "usuario",
   "criadoEm": "…",
   "atualizadoEm": "…"
 }
 ```
 
-`inicio`/`fim` em ISO UTC; a tela exibe no fuso devolvido pela listagem. `cliente: null` = compromisso interno. `status`: `agendado`, `realizado` ou `cancelado`. `origem`: `demonstracao` (semente fictícia) ou `usuario`.
+`inicio`/`fim` em ISO UTC; a tela exibe no fuso devolvido pela listagem. `cliente: null` = compromisso interno. `status`: `agendado`, `realizado` ou `cancelado`. `origem`: sempre `usuario` (cadastrado na tela ou pela API).
 
 ### `GET /api/v1/agenda?de=AAAA-MM-DD&ate=AAAA-MM-DD`
 
 Compromissos do usuário que acontecem entre as datas (inclusive), no fuso `DIALYS_FUSO_HORARIO`, em ordem de início. Sem parâmetros: hoje. No máximo 62 dias por consulta (`400 PERIODO_INVALIDO`).
 
 ```json
-{ "modo": "demonstracao", "fuso": "America/Sao_Paulo", "hoje": "2026-10-07", "periodo": { "de": "2026-10-05", "ate": "2026-10-11" }, "dados": [ { "id": "cmp_…" } ] }
+{ "fuso": "America/Sao_Paulo", "hoje": "2026-10-07", "periodo": { "de": "2026-10-05", "ate": "2026-10-11" }, "dados": [ { "id": "cmp_…" } ] }
 ```
 
 ### `POST /api/v1/agenda`
@@ -574,12 +571,6 @@ Erros de validação: `422 DADOS_INVALIDOS` com a mensagem de cada campo em `det
 { "erro": { "codigo": "DADOS_INVALIDOS", "mensagem": "O término deve ser depois do início.", "detalhe": { "campos": { "fim": "O término deve ser depois do início." } }, "requestId": "req_…" } }
 ```
 
-### `POST /api/v1/agenda/demonstracao`
-
-"Restaurar demonstração": descarta as alterações do usuário na agenda fictícia e gera de novo a da semana atual. Responde `{ "restaurado": true, "compromissos": 27 }`. Fora do modo demonstração: `409 FORA_DA_DEMONSTRACAO`.
-
----
-
 ## Fluxo típico de integração
 
 ```
@@ -596,7 +587,6 @@ POST /crm/sincronizar           → 201 { protocolo }
 |---|---|
 | Etapas 2 a 5 rodam no próprio servidor Next, depois da resposta (`after()`) | Cada etapa vira um step de fila durável (Inngest/BullMQ), com retentativa por etapa |
 | Banco em arquivo JSON local (`.dialys/banco.json`), um processo só | Postgres (tabelas `reuniao`, `analise`, `sinal`, `mencao_produto`, `sincronizacao_crm`, `conversa_assistente`, `compromisso`); só os repositórios mudam |
-| Carteira fictícia + agenda fictícia (`DIALYS_DADOS_DEMONSTRACAO`) | Carteira do CRM/ERP em `cadastroReal()` e agenda na tabela `compromisso`; calendário externo (Outlook/Teams) numa etapa futura |
-| STT desligado (`422 STT_NAO_CONFIGURADO`) | Provedor com diarização pt-BR atrás de `ServicoTranscricao` |
+| Carteira = contas analisadas | Carteira do CRM/ERP em `cadastroReal()`; calendário externo (Outlook/Teams) numa etapa futura |
 | Webhook do CRM simulado | POST assinado (HMAC) para a URL do CRM, com retentativa |
 | Sem autenticação | Token OAuth2 (client credentials) para sistemas e sessão do IdP para o frontend |

@@ -18,7 +18,7 @@ const DESTAQUES = [
 ];
 
 export default function EnvioPage() {
-  // Menu Exemplo: amostra real da TOTVS (data/demo/totvs) e cenários roteirizados (data/demo/cenarios).
+  // Menu Exemplo: amostra real (anonimizada) da TOTVS, em data/exemplos/totvs.
   // Só títulos; o texto é carregado ao escolher.
   const exemplos = listarExemplos();
 

@@ -4,7 +4,7 @@ import { Add, Checkmark, ChevronDown } from "@carbon/icons-react";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { cn } from "@/lib/cn";
 import { normalizarBusca } from "@/lib/formatar";
-import type { ContaResumo } from "@/lib/mock/contas";
+import type { ContaResumo } from "@/lib/contas";
 import { listarContasAnalisadas } from "./actions";
 
 /** "Indústria Acme Ltda." → "conta-industria-acme-ltda" (mesmo nome, mesma conta na Central de Insights). */

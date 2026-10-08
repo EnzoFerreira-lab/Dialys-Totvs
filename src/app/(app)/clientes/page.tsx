@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { dataNoFuso, horaNoFuso, rotuloDia } from "@/lib/fuso";
-import { modoAgenda } from "@/server/agenda/agenda";
 import { usuarioDaSessao } from "@/server/auth/sessao-pagina";
 import { fusoHorario } from "@/server/config/dados";
 import { MeusClientes } from "./meus-clientes";
@@ -49,7 +48,7 @@ async function MeuDia() {
       </header>
       {/* Agenda em destaque; no celular e em telas médias os blocos se empilham (agenda primeiro). */}
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <MinhaAgenda hojeInicial={hoje} fuso={fuso} modo={modoAgenda()} />
+        <MinhaAgenda hojeInicial={hoje} fuso={fuso} />
         <MeusClientes />
       </div>
     </>

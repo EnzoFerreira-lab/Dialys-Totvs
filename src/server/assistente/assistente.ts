@@ -2,14 +2,14 @@
 // Hoje a rota de texto (POST /api/v1/assistente/mensagens) chama responderPergunta(); um canal de voz
 // futuro faz fala → texto, chama a mesma função e converte a resposta em fala, sem duplicar regras.
 //
-// Fluxo: pergunta → motor (Claude ou demonstração) pede consultas → o serviço executa cada uma com o
+// Fluxo: pergunta → motor (Claude ou regras locais) pede consultas → o serviço executa cada uma com o
 // usuário autenticado (permissão em todas) → resultados voltam ao motor → resposta + fontes gravadas
 // na conversa do usuário.
 import Anthropic from "@anthropic-ai/sdk";
 import type { ConsultaRegistrada, ConversaRegistro, FonteMensagem, MensagemConversa } from "../db/banco";
 import { buscarConversa, registrarTroca } from "../db/repositorio";
 import { dataNoFuso, horaNoFuso } from "@/lib/fuso";
-import { buscarCompromisso, modoAgenda } from "../agenda/agenda";
+import { buscarCompromisso } from "../agenda/agenda";
 import { podeAcessarConta, type Usuario } from "../auth/usuarios";
 import { fusoHorario } from "../config/dados";
 import { temChaveClaude, traduzirErroAnalise, usarModoDemonstracao } from "../pipeline/motor-analise";
@@ -211,7 +211,6 @@ async function compromissoDoUsuario(ctx: ContextoConsulta, id: string): Promise<
     local: c.local,
     observacoes: c.observacoes,
     cliente: cliente ? { ...cliente, temReunioesAnalisadas: analisado } : null,
-    demonstracao: c.origem === "demonstracao" || modoAgenda() === "demonstracao",
   };
 }
 

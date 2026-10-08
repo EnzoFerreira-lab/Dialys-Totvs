@@ -30,7 +30,6 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   delete process.env.DIALYS_BANCO_ARQUIVO;
-  delete process.env.DIALYS_DADOS_DEMONSTRACAO;
   await rm(pasta, { recursive: true, force: true });
 });
 
@@ -59,15 +58,10 @@ describe("ordem das reuniões", () => {
 });
 
 describe("Meus clientes com reuniões analisadas", () => {
-  it("demonstração: carteira fictícia sem avaliação + contas analisadas com a situação calculada", async () => {
+  it("só as contas analisadas, com a situação calculada, respeitando o escopo", async () => {
     const { clientes, total } = await listarClientes(RICARDO, { limite: 50 });
-    expect(total).toBe(16 + 2);
+    expect(total).toBe(2);
     expect(clientes.find((c) => c.id === "conta-horizonte")).toMatchObject({ nome: "Grupo Horizonte", situacao: { faixa: "estavel" } });
-    expect(clientes.find((c) => c.id === "c-001")).toMatchObject({ situacao: null });
-  });
-
-  it("dados reais: só as contas analisadas, respeitando o escopo", async () => {
-    process.env.DIALYS_DADOS_DEMONSTRACAO = "false";
     expect((await listarClientes(RICARDO)).clientes.map((c) => c.nome)).toEqual(["Beta Indústria", "Grupo Horizonte"]);
     expect((await listarClientes(RESTRITO)).clientes.map((c) => c.id)).toEqual(["conta-beta"]);
   });

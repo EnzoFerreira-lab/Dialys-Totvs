@@ -170,7 +170,6 @@ export function DetalheCompromisso({ compromisso, fuso, onFechar, onEditar, onAl
             <p className="text-[12px] text-text-secondary">Observações</p>
             <p className="mt-1 text-[14px] whitespace-pre-wrap text-text-primary">{c.observacoes || <span className="text-text-helper">Nenhuma observação.</span>}</p>
           </div>
-          {c.origem === "demonstracao" ? <p className="pt-3 text-[12px] text-text-helper">Compromisso fictício dos dados de demonstração.</p> : null}
           {erro ? (
             <p role="alert" className="pt-3 text-[13px] text-support-error">
               {erro}
@@ -265,15 +264,11 @@ export function FormularioCompromisso({ aberto, fuso, onFechar, onSalvo }: Formu
     setErros({});
   }
 
-  // Carteira mudou (cliente removido ou demonstração restaurada): a lista é buscada de novo ao abrir.
+  // Cliente removido da carteira: a lista é buscada de novo ao abrir.
   useEffect(() => {
     const limpar = () => setClientes(null);
     window.addEventListener(EVENTO_CARTEIRA_ALTERADA, limpar);
-    window.addEventListener(EVENTO_CARTEIRA_ALTERADA + ":agenda", limpar);
-    return () => {
-      window.removeEventListener(EVENTO_CARTEIRA_ALTERADA, limpar);
-      window.removeEventListener(EVENTO_CARTEIRA_ALTERADA + ":agenda", limpar);
-    };
+    return () => window.removeEventListener(EVENTO_CARTEIRA_ALTERADA, limpar);
   }, []);
 
   // Clientes da carteira do usuário (o servidor valida de novo ao salvar).

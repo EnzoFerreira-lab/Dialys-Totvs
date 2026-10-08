@@ -5,7 +5,7 @@
 import { connection } from "next/server";
 import type { ListaAgendaApi } from "@/lib/agenda";
 import { dataNoFuso, somarDias } from "@/lib/fuso";
-import { MAXIMO_DIAS_CONSULTA, criarCompromisso, listarCompromissos, modoAgenda } from "@/server/agenda/agenda";
+import { MAXIMO_DIAS_CONSULTA, criarCompromisso, listarCompromissos } from "@/server/agenda/agenda";
 import { SEM_SESSAO, lerCorpoJson, respostaErroAgenda } from "@/server/api/agenda";
 import { comTratamento, erro, json } from "@/server/api/http";
 import { usuarioDaRequisicao } from "@/server/auth/sessao";
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     if (somarDias(de, MAXIMO_DIAS_CONSULTA) <= ate) {
       return erro(400, "PERIODO_INVALIDO", `Consulte no máximo ${MAXIMO_DIAS_CONSULTA} dias por vez.`, requestId);
     }
-    const corpo: ListaAgendaApi = { modo: modoAgenda(), fuso, hoje, periodo: { de, ate }, dados: await listarCompromissos(usuario, { de, ate }) };
+    const corpo: ListaAgendaApi = { fuso, hoje, periodo: { de, ate }, dados: await listarCompromissos(usuario, { de, ate }) };
     return json(corpo, 200, requestId);
   });
 }

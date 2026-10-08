@@ -1,9 +1,8 @@
-// Pipeline de processamento de uma reunião, em 5 etapas:
+// Pipeline de processamento de uma reunião (só texto: o Dialys não recebe áudio), em 4 etapas:
 //   1. RECEBIMENTO          valida e sanitiza a entrada e registra a reunião (status EM_PROCESSAMENTO)
-//   2. TRANSCRICAO          áudio → texto via STT; texto pula a etapa
-//   3. ANALISE_IA           Claude (ou modo demonstração) gera sinais, produtos e resumo
-//   4. VALIDACAO_EVIDENCIAS só ficam sinais cuja citação existe literalmente na transcrição
-//   5. PERSISTENCIA         grava analise, sinal e mencao_produto e conclui a reunião
+//   2. ANALISE_IA           Claude (ou as regras locais, sem chave) gera sinais, produtos e resumo
+//   3. VALIDACAO_EVIDENCIAS só ficam sinais cuja citação existe literalmente na transcrição
+//   4. PERSISTENCIA         grava analise, sinal e mencao_produto e conclui a reunião
 // O estado de cada etapa é gravado ao entrar e ao sair, então a API mostra o progresso e uma falha
 // fica registrada na etapa onde ocorreu. No piloto a execução roda no próprio servidor Next (after());
 // na produção, cada etapa vira um step de uma fila durável (Inngest), com retentativa por etapa.
@@ -13,21 +12,24 @@ import { validarEvidencias } from "../ai/validar-evidencia";
 import type { Etapa, FalhaRegistrada, NomeEtapa, ReuniaoRegistro, StatusEtapa } from "../db/banco";
 import { atualizarReuniao, buscarReuniao, criarReuniao, salvarResultado } from "../db/repositorio";
 import { escolherMotor, traduzirErroAnalise, type MotorAnalise } from "./motor-analise";
-import { servicoTranscricao, type AudioRecebido, type ServicoTranscricao } from "./transcricao-audio";
 
 /** ~3 horas de reunião. Acima disso, a transcrição deve ser dividida. */
 export const LIMITE_CARACTERES = 200_000;
 const MIN_CARACTERES = 20;
-/** "Em processamento" sem atualização há mais que isso: o servidor parou no meio (ex.: reinício). */
+/** "Em processamento" sem atualização há mais que isso: a análise travou (a do Claude leva até ~2 min). */
 export const TEMPO_MAXIMO_PROCESSAMENTO_MS = 6 * 60_000;
+/** Agendada e não iniciada em até este tempo: o after() não rodou. */
+const TEMPO_PARA_INICIAR_MS = 15_000;
+/** Quantas vezes uma reunião interrompida é retomada antes de falhar. */
+const MAXIMO_RETOMADAS = 2;
 
-/** Espera do modo demonstração, para a tela mostrar as etapas andando (a análise local leva milissegundos). */
+/** Espera das regras locais, para a tela mostrar as etapas andando (a análise local leva milissegundos). */
 const ATRASO_DEMO_MS = 1500;
 
-export const ETAPAS: NomeEtapa[] = ["RECEBIMENTO", "TRANSCRICAO", "ANALISE_IA", "VALIDACAO_EVIDENCIAS", "PERSISTENCIA"];
+export const ETAPAS: NomeEtapa[] = ["RECEBIMENTO", "ANALISE_IA", "VALIDACAO_EVIDENCIAS", "PERSISTENCIA"];
 
 export type EntradaReuniao = {
-  conteudo: { tipo: "texto"; texto: string; nomeArquivo?: string } | { tipo: "audio"; audio: AudioRecebido };
+  conteudo: { tipo: "texto"; texto: string; nomeArquivo?: string };
   contexto?: unknown;
   contaId?: unknown;
   contaNome?: unknown;
@@ -47,11 +49,31 @@ export class ErroEntrada extends Error {
 
 export type DependenciasPipeline = {
   motor?: MotorAnalise;
-  /** undefined: usa o provedor configurado; null: força "sem STT". */
-  stt?: ServicoTranscricao | null;
-  /** Espera simulada do modo demonstração (ms). */
+  /** Espera das regras locais (ms). */
   atrasoDemoMs?: number;
 };
+
+/* ---------- Reuniões em execução neste processo ---------- */
+
+// No globalThis: as rotas são empacotadas separadamente e o HMR recarrega módulos, mas todas precisam
+// ver o mesmo registro. Um servidor reiniciado começa vazio, e é assim que uma reunião parada é notada.
+type Execucao = { agendadaEm: number; iniciada: boolean };
+const chaveExecucoes = Symbol.for("dialys.pipeline.execucoes");
+function execucoes(): Map<string, Execucao> {
+  const global = globalThis as typeof globalThis & { [chaveExecucoes]?: Map<string, Execucao> };
+  return (global[chaveExecucoes] ??= new Map());
+}
+
+/** A rota chama antes de responder: daqui em diante a reunião conta como "em execução". */
+export function agendarProcessamento(reuniaoId: string) {
+  execucoes().set(reuniaoId, { agendadaEm: Date.now(), iniciada: false });
+}
+
+/** O processamento desta reunião está rodando (ou acabou de ser agendado) neste processo? */
+function estaEmExecucao(reuniaoId: string) {
+  const execucao = execucoes().get(reuniaoId);
+  return Boolean(execucao && (execucao.iniciada || Date.now() - execucao.agendadaEm < TEMPO_PARA_INICIAR_MS));
+}
 
 const agora = () => new Date().toISOString();
 
@@ -76,7 +98,7 @@ function validarTexto(texto: string) {
 /* ---------- Etapa 1 ---------- */
 
 /** Valida, sanitiza e registra a reunião. Lança ErroEntrada sem gravar nada se a entrada for inválida. */
-export async function receberReuniao(entrada: EntradaReuniao, deps: DependenciasPipeline = {}): Promise<ReuniaoRegistro> {
+export async function receberReuniao(entrada: EntradaReuniao): Promise<ReuniaoRegistro> {
   let contexto: ContextoReuniao | undefined;
   if (entrada.contexto !== undefined && entrada.contexto !== null) {
     const lido = ContextoReuniaoSchema.safeParse(entrada.contexto);
@@ -97,32 +119,17 @@ export async function receberReuniao(entrada: EntradaReuniao, deps: Dependencias
     contaNome = nome;
   }
 
-  let transcricao: string | null = null;
-  let detalhe: string;
-  if (entrada.conteudo.tipo === "texto") {
-    transcricao = sanitizar(entrada.conteudo.texto);
-    validarTexto(transcricao);
-    detalhe = `Texto recebido (${transcricao.length.toLocaleString("pt-BR")} caracteres)${
-      entrada.conteudo.nomeArquivo ? ` do arquivo ${entrada.conteudo.nomeArquivo}` : ""
-    }.`;
-  } else {
-    const stt = deps.stt === undefined ? servicoTranscricao() : deps.stt;
-    if (!stt) {
-      throw new ErroEntrada(
-        "STT_NAO_CONFIGURADO",
-        422,
-        "Transcrição de áudio não está habilitada no piloto (o serviço de STT é pago). Envie a transcrição em texto.",
-      );
-    }
-    if (entrada.conteudo.audio.bytes.length === 0) throw new ErroEntrada("ARQUIVO_VAZIO", 400, "O arquivo de áudio está vazio.");
-    detalhe = `Áudio recebido: ${entrada.conteudo.audio.nomeArquivo}.`;
-  }
+  const transcricao = sanitizar(entrada.conteudo.texto);
+  validarTexto(transcricao);
+  const detalhe = `Texto recebido (${transcricao.length.toLocaleString("pt-BR")} caracteres)${
+    entrada.conteudo.nomeArquivo ? ` do arquivo ${entrada.conteudo.nomeArquivo}` : ""
+  }.`;
 
   const instante = agora();
   return criarReuniao({
     status: "EM_PROCESSAMENTO",
-    origem: entrada.conteudo.tipo === "audio" ? "audio" : entrada.conteudo.nomeArquivo ? "arquivo_texto" : "texto",
-    nomeArquivo: entrada.conteudo.tipo === "audio" ? entrada.conteudo.audio.nomeArquivo : entrada.conteudo.nomeArquivo,
+    origem: entrada.conteudo.nomeArquivo ? "arquivo_texto" : "texto",
+    nomeArquivo: entrada.conteudo.nomeArquivo,
     contaId,
     contaNome,
     contexto,
@@ -136,7 +143,7 @@ export async function receberReuniao(entrada: EntradaReuniao, deps: Dependencias
   });
 }
 
-/* ---------- Etapas 2 a 5 ---------- */
+/* ---------- Etapas 2 a 4 ---------- */
 
 function marcarEtapa(reuniao: ReuniaoRegistro, nome: NomeEtapa, status: StatusEtapa, detalhe?: string) {
   const etapa = reuniao.etapas.find((e) => e.nome === nome);
@@ -155,37 +162,23 @@ const concluir = (id: string, nome: NomeEtapa, detalhe: string, status: StatusEt
   atualizarReuniao(id, (r) => marcarEtapa(r, nome, status, detalhe));
 
 /**
- * Executa as etapas 2 a 5 de uma reunião já recebida. Não lança por falha de transcrição ou de
- * análise: a falha fica gravada na reunião (status FALHOU) e a reunião é devolvida.
+ * Executa as etapas 2 a 4 de uma reunião já recebida. Não lança por falha de análise: a falha fica
+ * gravada na reunião (status FALHOU) e a reunião é devolvida.
  */
 export async function processarReuniao(
   reuniaoId: string,
   entrada: EntradaReuniao,
   deps: DependenciasPipeline = {},
 ): Promise<ReuniaoRegistro> {
-  let etapaAtual: NomeEtapa = "TRANSCRICAO";
+  let etapaAtual: NomeEtapa = "ANALISE_IA";
+  execucoes().set(reuniaoId, { agendadaEm: Date.now(), iniciada: true });
   try {
     const recebida = await buscarReuniao(reuniaoId);
     if (!recebida) throw new Error(`Reunião ${reuniaoId} não existe.`);
+    // O texto gravado no recebimento (já sanitizado) é o analisado; serve também para retomar.
+    const transcricao = recebida.transcricao ?? sanitizar(entrada.conteudo.texto);
 
-    // 2. Transcrição
-    let transcricao: string;
-    if (entrada.conteudo.tipo === "texto") {
-      transcricao = recebida.transcricao ?? "";
-      await concluir(reuniaoId, "TRANSCRICAO", "Entrada já em texto: STT não necessário.", "PULADA");
-    } else {
-      const stt = deps.stt === undefined ? servicoTranscricao() : deps.stt;
-      if (!stt) throw new Error("STT não configurado.");
-      await iniciar(reuniaoId, "TRANSCRICAO");
-      transcricao = sanitizar(await stt.transcrever(entrada.conteudo.audio));
-      validarTexto(transcricao);
-      await atualizarReuniao(reuniaoId, (r) => {
-        r.transcricao = transcricao;
-        marcarEtapa(r, "TRANSCRICAO", "CONCLUIDA", `Transcrito por ${stt.nome} (${transcricao.length.toLocaleString("pt-BR")} caracteres).`);
-      });
-    }
-
-    // 3. Análise IA
+    // 2. Análise
     etapaAtual = "ANALISE_IA";
     await iniciar(reuniaoId, "ANALISE_IA");
     const motor = deps.motor ?? escolherMotor({ atrasoDemoMs: deps.atrasoDemoMs ?? ATRASO_DEMO_MS });
@@ -194,11 +187,11 @@ export async function processarReuniao(
       reuniaoId,
       "ANALISE_IA",
       `${
-        motor.nome === "claude" ? `Claude (${gerada.auditoria.modeloResposta})` : `Modo demonstração, sem custo (${gerada.auditoria.origem})`
+        motor.nome === "claude" ? `Claude (${gerada.auditoria.modeloResposta})` : "Análise por regras locais"
       }: ${gerada.analise.sinais.length} sinal(is) proposto(s).`,
     );
 
-    // 4. Validação de evidências
+    // 3. Validação de evidências
     etapaAtual = "VALIDACAO_EVIDENCIAS";
     await iniciar(reuniaoId, "VALIDACAO_EVIDENCIAS");
     const { sinaisValidos, ...evidencias } = validarEvidencias(transcricao, gerada.analise.sinais);
@@ -209,7 +202,7 @@ export async function processarReuniao(
       `${validos} de ${total} sinal(is) com citação literal confirmada${descartados ? `; ${descartados} descartado(s)` : ""}.`,
     );
 
-    // 5. Persistência
+    // 4. Persistência
     etapaAtual = "PERSISTENCIA";
     await iniciar(reuniaoId, "PERSISTENCIA");
     const resultado: ResultadoAnalise = {
@@ -233,10 +226,8 @@ export async function processarReuniao(
         ? traduzirErroAnalise(erro)
         : erro instanceof ErroEntrada
           ? { codigo: erro.codigo, httpStatus: erro.httpStatus, titulo: "Transcrição inválida", detalhe: erro.message }
-          : etapaAtual === "TRANSCRICAO"
-            ? { codigo: "STT_FALHOU", httpStatus: 502, titulo: "Falha na transcrição do áudio", detalhe: "O serviço de STT não respondeu. Tente novamente." }
-            : { codigo: "ERRO_INTERNO", httpStatus: 500, titulo: "Erro inesperado", detalhe: "Não foi possível concluir o processamento." };
-    if (falha.codigo === "ERRO_INTERNO" || falha.codigo === "STT_FALHOU") {
+          : { codigo: "ERRO_INTERNO", httpStatus: 500, titulo: "Erro inesperado", detalhe: "Não foi possível concluir o processamento." };
+    if (falha.codigo === "ERRO_INTERNO") {
       console.error(`[dialys/pipeline] reunião ${reuniaoId} falhou na etapa ${etapaAtual}`, erro);
     }
     return atualizarReuniao(reuniaoId, (r) => {
@@ -244,23 +235,45 @@ export async function processarReuniao(
       r.status = "FALHOU";
       r.falha = falha;
     });
+  } finally {
+    execucoes().delete(reuniaoId);
   }
 }
 
 /** Recebimento + processamento na mesma chamada (modo síncrono da API e testes). */
 export async function receberEProcessar(entrada: EntradaReuniao, deps: DependenciasPipeline = {}) {
-  const reuniao = await receberReuniao(entrada, deps);
+  const reuniao = await receberReuniao(entrada);
   return processarReuniao(reuniao.id, entrada, deps);
 }
 
 /**
- * Reunião como está agora. Uma reunião "em processamento" parada há mais de 6 minutos foi interrompida
- * (servidor reiniciado no meio) e passa a FALHOU, para o cliente não esperar para sempre.
+ * Reunião como está agora (a tela consulta a cada segundo enquanto processa).
+ *  - "Em processamento" sem estar rodando neste processo (servidor reiniciado ou código recarregado no
+ *    meio, ou o after() que não rodou): a análise é retomada na hora a partir do texto gravado, em vez
+ *    de a tela esperar até o limite. Depois de MAXIMO_RETOMADAS retomadas, falha.
+ *  - Rodando, mas parada há mais de 6 minutos: falha, para o cliente não esperar para sempre.
  */
-export async function consultarReuniao(id: string): Promise<ReuniaoRegistro | null> {
+export async function consultarReuniao(id: string, deps: DependenciasPipeline = {}): Promise<ReuniaoRegistro | null> {
   const reuniao = await buscarReuniao(id);
   if (!reuniao || reuniao.status !== "EM_PROCESSAMENTO") return reuniao;
+  if (!estaEmExecucao(id)) {
+    if (reuniao.transcricao && (reuniao.retomadas ?? 0) < MAXIMO_RETOMADAS) {
+      const retomada = await atualizarReuniao(id, (r) => {
+        r.retomadas = (r.retomadas ?? 0) + 1;
+        for (const etapa of r.etapas) if (etapa.nome !== "RECEBIMENTO" && etapa.status !== "PULADA") etapa.status = "PENDENTE";
+      });
+      agendarProcessamento(id);
+      console.warn(`[dialys/pipeline] reunião ${id} estava parada; retomando a análise (tentativa ${retomada.retomadas}).`);
+      void processarReuniao(id, { conteudo: { tipo: "texto", texto: reuniao.transcricao } }, deps);
+      return retomada;
+    }
+    return interromper(id);
+  }
   if (Date.now() - Date.parse(reuniao.atualizadaEm) < TEMPO_MAXIMO_PROCESSAMENTO_MS) return reuniao;
+  return interromper(id);
+}
+
+function interromper(id: string) {
   return atualizarReuniao(id, (r) => {
     const parada = r.etapas.find((e) => e.status === "EM_ANDAMENTO" || e.status === "PENDENTE");
     if (parada) marcarEtapa(r, parada.nome, "FALHOU", "Processamento interrompido.");

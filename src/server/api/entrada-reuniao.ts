@@ -3,7 +3,6 @@
 //   multipart/form-data  arquivo (.txt, .json da TOTVS ou áudio) ou texto; contexto (JSON), contaId, contaNome, idReuniao
 import { extrairReunioes, type ReuniaoImportada } from "@/lib/transcricao";
 import { ErroEntrada, type EntradaReuniao } from "../pipeline/processar-reuniao";
-import { ehAudio } from "../pipeline/transcricao-audio";
 
 export const TAMANHO_MAXIMO_ARQUIVO = 20 * 1024 * 1024;
 
@@ -74,16 +73,8 @@ async function lerFormulario(request: Request): Promise<EntradaReuniao> {
   if (arquivo instanceof File) {
     if (arquivo.size > TAMANHO_MAXIMO_ARQUIVO) throw new ErroEntrada("ARQUIVO_GRANDE", 413, "Arquivo acima de 20 MB.");
     const ext = extensao(arquivo.name);
-    if (ehAudio(arquivo.name, arquivo.type)) {
-      return {
-        conteudo: {
-          tipo: "audio",
-          audio: { nomeArquivo: arquivo.name, tipoMime: arquivo.type, bytes: new Uint8Array(await arquivo.arrayBuffer()) },
-        },
-        contexto,
-        contaId,
-        contaNome,
-      };
+    if (arquivo.type.startsWith("audio/") || [".mp3", ".wav", ".m4a", ".ogg", ".webm"].includes(ext)) {
+      throw new ErroEntrada("AUDIO_NAO_ACEITO", 415, "O Dialys não recebe áudio. Envie a transcrição em texto (.txt ou JSON da TOTVS).");
     }
     if (ext === ".json" || arquivo.type === "application/json") {
       const reunioes = extrairReunioes(await arquivo.text());
@@ -102,7 +93,7 @@ async function lerFormulario(request: Request): Promise<EntradaReuniao> {
     throw new ErroEntrada(
       "FORMATO_NAO_SUPORTADO",
       415,
-      `Formato ${ext || arquivo.type || "desconhecido"} não suportado. Use .txt, .json (formato TOTVS) ou áudio. PDF e DOCX ainda não são lidos.`,
+      `Formato ${ext || arquivo.type || "desconhecido"} não suportado. Use .txt ou .json (formato TOTVS). PDF e DOCX ainda não são lidos.`,
     );
   }
 

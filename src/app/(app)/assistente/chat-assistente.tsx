@@ -79,11 +79,6 @@ function BalaoAssistente({ mensagem }: { mensagem: MensagemAssistenteApi }) {
     <div className="max-w-[min(680px,92%)] rounded-[12px] rounded-tl-[2px] border border-white/10 bg-[#2B2B2B] px-4 py-3 text-[14px] leading-[1.6] text-[#E0E0E0]">
       <TextoFormatado texto={mensagem.texto} />
       <FontesMensagem fontes={mensagem.fontes} />
-      {mensagem.modo === "demonstracao" ? (
-        <p className="mt-2.5 text-[11px] text-text-on-shell-muted">
-          Modo demonstração: resposta montada por regras a partir do banco, sem IA.
-        </p>
-      ) : null}
     </div>
   );
 }

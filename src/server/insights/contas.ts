@@ -141,6 +141,7 @@ function montarConta(chave: string, analisesRecebidas: AnaliseConcluida[], reuni
     produtos: [...produtos.values()],
     evidencias: reuniao.transcricao ? montarEvidencias(reuniao.transcricao, sinais) : [],
     diagnostico: resultado.analise.resumoExecutivo,
+    geradoPorIa: resultado.auditoria.modo !== "demonstracao",
     acao: sinais[0]?.recomendacaoAcao ?? resultado.analise.proximosPassosSugeridos[0] ?? "Nenhuma ação sugerida para esta reunião.",
     proximosPassos: resultado.analise.proximosPassosSugeridos,
     saude,

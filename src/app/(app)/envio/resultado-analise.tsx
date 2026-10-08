@@ -14,7 +14,7 @@ import {
 import type { ComponentType, ReactNode } from "react";
 import { SignalTag, type SignalVariant } from "@/components/sinais/signal-tag";
 import { cn } from "@/lib/cn";
-import type { ContaResumo } from "@/lib/mock/contas";
+import type { ContaResumo } from "@/lib/contas";
 import { descreverContexto, type ContextoReuniao } from "@/lib/transcricao";
 import type { ResultadoAnalise } from "@/server/ai/analisar-reuniao";
 import type { StatusProduto } from "@/server/ai/schemas";
@@ -132,14 +132,6 @@ export function ResultadoAnaliseView({
             <CheckmarkFilled size={16} aria-hidden="true" />
             Análise concluída{conta ? ` · ${conta.nome}` : ""}
           </p>
-          {demonstracao ? (
-            <span
-              className="rounded-full border border-[#C6C6C6] bg-background px-2.5 py-0.5 text-[11px] font-medium text-text-secondary"
-              title="Nenhuma IA foi chamada: a análise vem de um cenário pré-configurado ou de regras locais."
-            >
-              Modo demonstração
-            </span>
-          ) : null}
         </div>
         {contexto ? (
           <p className="mt-1.5 text-[12px] text-text-helper">
@@ -153,7 +145,7 @@ export function ResultadoAnaliseView({
 
         {demonstracao ? (
           <p className="mt-5 border-t border-border-subtle pt-4 text-[12px] text-text-helper">
-            Simulação local, sem custo · origem: {auditoria.origem} · {segundos.format(auditoria.duracaoMs / 1000)} s
+            Análise por regras locais · {segundos.format(auditoria.duracaoMs / 1000)} s
           </p>
         ) : (
           <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border-subtle pt-4 font-mono text-[12px] sm:grid-cols-[1fr_1fr_1fr_1.6fr]">
@@ -292,8 +284,8 @@ type EtapaPipeline = { nome: NomeEtapa; status: StatusEtapa; detalhe?: string };
 
 const ROTULO_ETAPA: Record<NomeEtapa, string> = {
   RECEBIMENTO: "Recebimento e sanitização",
-  TRANSCRICAO: "Transcrição do áudio (STT)",
-  ANALISE_IA: "Análise de sinais com IA",
+  TRANSCRICAO: "Transcrição",
+  ANALISE_IA: "Análise de sinais",
   VALIDACAO_EVIDENCIAS: "Validação das citações",
   PERSISTENCIA: "Gravação no banco",
 };
@@ -312,8 +304,11 @@ function IconeEtapa({ status }: { status: StatusEtapa }) {
   );
 }
 
-/** Antes da primeira resposta da API: as 5 etapas aguardando. */
-const ETAPAS_PENDENTES: EtapaPipeline[] = (Object.keys(ROTULO_ETAPA) as NomeEtapa[]).map((nome) => ({ nome, status: "PENDENTE" }));
+/** Antes da primeira resposta da API: as 4 etapas aguardando (o Dialys só recebe texto). */
+const ETAPAS_PENDENTES: EtapaPipeline[] = (["RECEBIMENTO", "ANALISE_IA", "VALIDACAO_EVIDENCIAS", "PERSISTENCIA"] as NomeEtapa[]).map((nome) => ({
+  nome,
+  status: "PENDENTE",
+}));
 
 const STATUS_ETAPA: Record<StatusEtapa, string> = {
   PENDENTE: "aguardando",
@@ -323,17 +318,27 @@ const STATUS_ETAPA: Record<StatusEtapa, string> = {
   FALHOU: "falhou",
 };
 
-/** Progresso do pipeline, atualizado pelas consultas a GET /api/v1/reunioes/{id}. */
-export function AnalisandoView({ etapas }: { etapas?: EtapaPipeline[] }) {
+/**
+ * Progresso do pipeline, atualizado pelas consultas a GET /api/v1/reunioes/{id}. `concluida`: todas as
+ * etapas terminaram; a tela mostra isso antes de levar ao Dashboard ou à Central.
+ */
+export function AnalisandoView({ etapas, concluida = false, destino }: { etapas?: EtapaPipeline[]; concluida?: boolean; destino?: string }) {
   return (
-    <section aria-live="polite" aria-busy="true" className="rounded-[12px] border border-border-subtle bg-layer-01 p-5 sm:p-6">
+    <section aria-live="polite" aria-busy={!concluida} className="rounded-[12px] border border-border-subtle bg-layer-01 p-5 sm:p-6">
       <div className="flex items-start gap-4">
-        <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-interactive border-t-transparent" />
+        {concluida ? (
+          <CheckmarkFilled size={20} className="mt-0.5 shrink-0 text-[#198038]" aria-hidden="true" />
+        ) : (
+          <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-interactive border-t-transparent" />
+        )}
         <div>
-          <p className="text-[15px] font-semibold text-text-primary">Analisando sinais comerciais via IA...</p>
+          <p className="text-[15px] font-semibold text-text-primary">
+            {concluida ? "Análise concluída" : "Analisando sinais comerciais..."}
+          </p>
           <p className="mt-1 text-[13px] leading-[1.55] text-text-secondary">
-            Lendo a transcrição inteira, extraindo churn, oportunidades, objeções e produtos, e conferindo cada citação no texto original.
-            Com o Claude, leva de 20 a 60 segundos.
+            {concluida
+              ? `Todas as etapas terminaram e o resultado foi gravado.${destino ? ` Abrindo ${destino}...` : ""}`
+              : "Lendo a transcrição inteira, extraindo churn, oportunidades, objeções e produtos, e conferindo cada citação no texto original. Você só é levado ao resultado quando tudo terminar."}
           </p>
         </div>
       </div>
@@ -393,13 +398,6 @@ export function FalhaAnaliseView({ falha }: { falha: FalhaAnalise }) {
               não vai para o repositório.
             </li>
           </ol>
-        ) : null}
-        {falha.semChave ? (
-          <p className="mt-3 border-t border-[#FFD7D9] pt-3">
-            Para apresentar sem custo, use o modo demonstração: adicione{" "}
-            <code className="font-mono text-[12px]">DIALYS_MODO_DEMO=true</code> ao{" "}
-            <code className="font-mono text-[12px]">.env.local</code> e reinicie o servidor.
-          </p>
         ) : null}
       </div>
     </section>

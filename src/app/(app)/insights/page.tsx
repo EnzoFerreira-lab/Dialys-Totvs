@@ -8,7 +8,6 @@ import { usuarioDaSessao } from "@/server/auth/sessao-pagina";
 import { buscarClienteNoCadastro } from "@/server/clientes/clientes";
 import { podeAcessarConta } from "@/server/auth/usuarios";
 import { listarReunioesCentral } from "@/server/insights/contas";
-import { usarModoDemonstracao } from "@/server/pipeline/motor-analise";
 import { CentralInsights } from "./central-insights";
 
 export const metadata: Metadata = { title: "Central de Insights" };
@@ -84,7 +83,7 @@ async function InsightsDasReunioes({ searchParams }: { searchParams: ParametrosB
       </EstadoConta>
     );
   }
-  return <CentralInsights reunioes={reunioes} modoDemonstracao={usarModoDemonstracao()} />;
+  return <CentralInsights reunioes={reunioes} />;
 }
 
 export default function InsightsPage({ searchParams }: { searchParams: ParametrosBusca }) {

@@ -2,12 +2,12 @@
 // argumentos validados por schema, execução no servidor, filtro de permissão por usuário em toda
 // consulta e volume limitado (com aviso quando a lista foi cortada). Nada de SQL livre, nada de
 // credenciais, e nunca o banco inteiro. Independem do fornecedor de IA: o motor Claude as expõe como
-// tools; o motor de demonstração as chama direto; um futuro canal de voz reutiliza as mesmas.
+// tools; o motor por regras as chama direto; um futuro canal de voz reutiliza as mesmas.
 import { z } from "zod";
 import { chaveConta, codigoReuniao, criticidadeConta, dataDaReuniao, nomeConta, temDataInformada, type ContaInsight } from "@/lib/insights";
 import { normalizarBusca } from "@/lib/formatar";
 import { dataNoFuso, horaNoFuso, somarDias } from "@/lib/fuso";
-import { listarCompromissos, modoAgenda } from "../agenda/agenda";
+import { listarCompromissos } from "../agenda/agenda";
 import { fusoHorario } from "../config/dados";
 import type { ReuniaoRegistro } from "../db/banco";
 import { listarAnalisesConcluidas, type AnaliseConcluida } from "../db/repositorio";
@@ -32,7 +32,7 @@ export type EntidadeConta = { id: string; nome: string };
 export type EntidadeReuniao = { id: string; codigo: string; contaId: string; contaNome: string; data: string; dataInformada: boolean };
 
 export type ResultadoFerramenta = {
-  /** O que vai para a IA (ou para o motor de demonstração): só dados, nunca instruções. */
+  /** O que vai para a IA (ou para o motor por regras): só dados, nunca instruções. */
   dados: Record<string, unknown>;
   /** Uma linha para auditoria da conversa. */
   resumo: string;
@@ -60,13 +60,9 @@ export { dataDaReuniao };
 
 export const dataBr = (iso: string) => iso.slice(0, 10).split("-").reverse().join("/");
 
-/** Origem dos dados, para a resposta avisar quando não é análise feita por IA sobre reunião real. */
+/** Como a análise foi feita: por regras locais (sem chave do Claude) não deve ser apresentada como IA. */
 function procedencia(analise: AnaliseConcluida) {
-  const { modo, origem } = analise.resultado.auditoria;
-  return {
-    analiseSimulada: modo === "demonstracao",
-    cenarioRoteirizado: modo === "demonstracao" && typeof origem === "string" && origem.startsWith("cenário"),
-  };
+  return { analisePorRegras: analise.resultado.auditoria.modo === "demonstracao" };
 }
 
 const linkConta = (contaId: string) => `/insights?conta=${encodeURIComponent(contaId)}`;
@@ -419,7 +415,7 @@ const MAXIMO_COMPROMISSOS = 30;
 export const consultarAgenda = definir({
   nome: "consultar_agenda",
   descricao:
-    "Lista os COMPROMISSOS da agenda do usuário: eventos com horário que ele mesmo marcou (título, cliente, data, início, término, status, local e observações), entre duas datas inclusivas (AAAA-MM-DD, no fuso configurado; padrão: hoje; até 31 dias). Compromissos NÃO são ações sugeridas: as ações sugeridas vêm de consultar_acoes_sugeridas e não têm horário. Informa se a agenda é de demonstração (fictícia) e se o cliente de cada compromisso tem reuniões analisadas.",
+    "Lista os COMPROMISSOS da agenda do usuário: eventos com horário que ele mesmo marcou (título, cliente, data, início, término, status, local e observações), entre duas datas inclusivas (AAAA-MM-DD, no fuso configurado; padrão: hoje; até 31 dias). Compromissos NÃO são ações sugeridas: as ações sugeridas vêm de consultar_acoes_sugeridas e não têm horário. Informa se o cliente de cada compromisso tem reuniões analisadas.",
   esquema: z
     .object({
       de: data.optional().describe("Data inicial (inclusiva), AAAA-MM-DD."),
@@ -438,12 +434,10 @@ export const consultarAgenda = definir({
     const { contas } = await dadosPermitidos(ctx);
     const analisadas = new Set(contas.map((c) => c.id));
     const lista = compromissos.slice(0, MAXIMO_COMPROMISSOS);
-    const demonstracao = modoAgenda() === "demonstracao";
     return {
       dados: {
         periodo: { de, ate },
         fuso,
-        agendaDeDemonstracao: demonstracao,
         compromissos: lista.map((c) => ({
           compromissoId: c.id,
           titulo: c.titulo,
@@ -457,9 +451,7 @@ export const consultarAgenda = definir({
         })),
         total: compromissos.length,
         truncado: compromissos.length > lista.length,
-        observacao: demonstracao
-          ? "Agenda de demonstração: compromissos fictícios, sem relação com reuniões reais. Compromissos não são ações sugeridas."
-          : "Compromissos marcados pelo usuário. Compromissos não são ações sugeridas.",
+        observacao: "Compromissos marcados pelo usuário. Compromissos não são ações sugeridas.",
       },
       resumo: `${compromissos.length} compromisso(s) entre ${de} e ${ate}`,
       // Agenda não é evidência sobre clientes: não vira fonte nem muda o foco da conversa.

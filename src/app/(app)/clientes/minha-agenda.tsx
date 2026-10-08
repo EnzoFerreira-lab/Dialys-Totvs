@@ -1,12 +1,9 @@
 "use client";
 
-import { Add, ChevronLeft, ChevronRight, Renew } from "@carbon/icons-react";
+import { Add, ChevronLeft, ChevronRight } from "@carbon/icons-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ModalConfirmacao } from "@/components/ui/modal-confirmacao";
-import { useToast } from "@/components/ui/provedor-toast";
-import type { Compromisso, ModoDados } from "@/lib/agenda";
+import type { Compromisso } from "@/lib/agenda";
 import { api, ErroDaApi } from "@/lib/api-cliente";
-import { EVENTO_CARTEIRA_ALTERADA } from "@/lib/eventos";
 import { cn } from "@/lib/cn";
 import { dataNoFuso, horaNoFuso, inicioDaSemana, minutosNoFuso, rotuloDia, somarDias, type DataCivil } from "@/lib/fuso";
 import { AgendaDia } from "./agenda-dia";
@@ -35,14 +32,13 @@ function rotuloSemana(segunda: DataCivil) {
 
 type Carregado = { semana: DataCivil; compromissos: Compromisso[] };
 
-type Props = { hojeInicial: DataCivil; fuso: string; modo: ModoDados };
+type Props = { hojeInicial: DataCivil; fuso: string };
 
 /**
  * "Minha agenda": semana no computador, lista do dia no celular. Lê e grava pela API /api/v1/agenda (a
  * mesma do assistente). Ações sugeridas pelo Dialys não aparecem aqui: compromisso é só o que o usuário marcou.
  */
-export function MinhaAgenda({ hojeInicial, fuso, modo }: Props) {
-  const toast = useToast();
+export function MinhaAgenda({ hojeInicial, fuso }: Props) {
   const [hoje, setHoje] = useState(hojeInicial);
   const [data, setData] = useState(hojeInicial);
   const [carregado, setCarregado] = useState<Carregado | null>(null);
@@ -50,8 +46,6 @@ export function MinhaAgenda({ hojeInicial, fuso, modo }: Props) {
   const [versao, setVersao] = useState(0);
   const [aberto, setAberto] = useState<Compromisso | null>(null);
   const [formulario, setFormulario] = useState<FormularioAberto | null>(null);
-  const [confirmarRestaurar, setConfirmarRestaurar] = useState(false);
-  const [restaurando, setRestaurando] = useState(false);
   const minuto = useSyncExternalStore(assinarMinuto, minutoAtual, semRelogio);
   const agoraMinutos = minuto === null ? null : minutosNoFuso(new Date(minuto * 60_000), fuso);
 
@@ -86,22 +80,6 @@ export function MinhaAgenda({ hojeInicial, fuso, modo }: Props) {
     setFormulario({ modo: "novo", data: dia, hora: inicio });
   }
 
-  async function restaurar() {
-    setRestaurando(true);
-    try {
-      await api.restaurarDemonstracao();
-      toast({ titulo: "Demonstração restaurada", descricao: "A agenda fictícia e a carteira de demonstração voltaram ao estado inicial." });
-      window.dispatchEvent(new Event(EVENTO_CARTEIRA_ALTERADA));
-      setConfirmarRestaurar(false);
-      setData(hoje);
-      recarregar();
-    } catch (falha) {
-      toast({ titulo: "Não foi possível restaurar", descricao: falha instanceof ErroDaApi ? falha.message : undefined });
-    } finally {
-      setRestaurando(false);
-    }
-  }
-
   const botaoNav = "flex h-9 w-9 items-center justify-center rounded-[4px] text-text-primary transition-colors hover:bg-[#E8E8E8]";
 
   return (
@@ -110,18 +88,6 @@ export function MinhaAgenda({ hojeInicial, fuso, modo }: Props) {
         <h2 id="titulo-minha-agenda" className="text-[18px] leading-6 font-normal text-text-primary">
           Minha agenda
         </h2>
-        {modo === "demonstracao" ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF2E0] px-2.5 py-0.5 text-[11px] font-medium text-[#8A5A00]" title="Compromissos e clientes fictícios, guardados só para você. Nenhum dado real da empresa.">
-            <span className="h-1.5 w-1.5 rounded-full bg-interactive" aria-hidden="true" />
-            Dados de demonstração
-          </span>
-        ) : null}
-        {modo === "demonstracao" ? (
-          <button type="button" onClick={() => setConfirmarRestaurar(true)} className="inline-flex h-7 items-center gap-1 rounded-[4px] px-2 text-[12px] text-text-secondary transition-colors hover:bg-[#F2F2F2] hover:text-text-primary">
-            <Renew size={14} aria-hidden="true" />
-            Restaurar demonstração
-          </button>
-        ) : null}
         <button
           type="button"
           onClick={() => novo()}
@@ -231,18 +197,6 @@ export function MinhaAgenda({ hojeInicial, fuso, modo }: Props) {
           recarregar();
         }}
       />
-      <ModalConfirmacao
-        aberto={confirmarRestaurar}
-        titulo="Restaurar a agenda de demonstração?"
-        rotulo="Dados de demonstração"
-        rotuloConfirmar="Restaurar"
-        ocupado={restaurando}
-        onConfirmar={restaurar}
-        onCancelar={() => setConfirmarRestaurar(false)}
-      >
-        Os compromissos que você criou ou alterou na demonstração serão descartados, a agenda fictícia volta a ser a da semana atual e os
-        clientes fictícios que você removeu voltam para “Meus clientes”. Nenhum dado real é afetado.
-      </ModalConfirmacao>
     </section>
   );
 }

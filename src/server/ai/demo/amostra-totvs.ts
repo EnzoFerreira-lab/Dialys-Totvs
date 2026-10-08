@@ -1,5 +1,5 @@
-// Amostra de reuniões reais enviada pela TOTVS (data/demo/totvs/*.json, formato amostra_reunioes.json).
-// Aparece no menu Exemplo da tela de envio; a análise delas vem do analisador por regras.
+// Amostra de reuniões reais enviada pela TOTVS (data/exemplos/totvs/*.json, formato amostra_reunioes.json).
+// Aparece no menu Exemplo da tela de envio; a análise segue o motor configurado (Claude ou regras locais).
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { extrairReunioes, type ReuniaoImportada } from "@/lib/transcricao";
@@ -7,7 +7,7 @@ import { extrairReunioes, type ReuniaoImportada } from "@/lib/transcricao";
 export function lerAmostraTotvs(): ReuniaoImportada[] {
   let arquivos: string[];
   try {
-    arquivos = readdirSync(path.join(process.cwd(), "data", "demo", "totvs"))
+    arquivos = readdirSync(path.join(process.cwd(), "data", "exemplos", "totvs"))
       .filter((nome) => nome.toLowerCase().endsWith(".json"))
       .sort();
   } catch {
@@ -18,8 +18,8 @@ export function lerAmostraTotvs(): ReuniaoImportada[] {
   const reunioes: ReuniaoImportada[] = [];
   for (const arquivo of arquivos) {
     try {
-      // Caminho escrito de forma estática para o build rastrear só data/demo/totvs.
-      const conteudo = readFileSync(path.join(process.cwd(), "data", "demo", "totvs", arquivo), "utf8");
+      // Caminho escrito de forma estática para o build rastrear só data/exemplos/totvs.
+      const conteudo = readFileSync(path.join(process.cwd(), "data", "exemplos", "totvs", arquivo), "utf8");
       const lidas = extrairReunioes(conteudo);
       if (!lidas) throw new Error("não é um JSON válido");
       for (const reuniao of lidas) {
@@ -29,7 +29,7 @@ export function lerAmostraTotvs(): ReuniaoImportada[] {
         reunioes.push(reuniao);
       }
     } catch (erro) {
-      console.warn(`[dialys/demo] amostra ignorada (${arquivo}): ${erro instanceof Error ? erro.message : String(erro)}`);
+      console.warn(`[dialys/exemplos] amostra ignorada (${arquivo}): ${erro instanceof Error ? erro.message : String(erro)}`);
     }
   }
   // Mais recentes primeiro.

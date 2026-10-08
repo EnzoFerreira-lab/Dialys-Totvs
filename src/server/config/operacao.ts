@@ -1,17 +1,15 @@
-// Tamanho da operação comercial do usuário (equipe e carteira). Não sai das reuniões: no piloto é
-// configuração (persona Ricardo Alves, 18 vendedores e 400+ contas); na produção vem do CRM/IdP.
-// Ajustável sem código por DIALYS_EQUIPE_VENDEDORES e DIALYS_CARTEIRA_CONTAS.
+// Tamanho da operação comercial do usuário (equipe e carteira). Não sai das reuniões: vem da
+// configuração (DIALYS_EQUIPE_VENDEDORES e DIALYS_CARTEIRA_CONTAS) e, na produção, do CRM/IdP.
+// Sem configuração, null: a tela não mostra números inventados.
 
-function inteiroDoAmbiente(nome: string, padrao: number) {
+function inteiroDoAmbiente(nome: string) {
   const valor = Number(process.env[nome]);
-  return Number.isInteger(valor) && valor > 0 ? valor : padrao;
+  return Number.isInteger(valor) && valor > 0 ? valor : null;
 }
 
 export function lerOperacaoComercial() {
   return {
-    vendedores: inteiroDoAmbiente("DIALYS_EQUIPE_VENDEDORES", 18),
-    contasSobGestao: inteiroDoAmbiente("DIALYS_CARTEIRA_CONTAS", 400),
-    /** "configuracao": números do piloto, não conectados à operação real. */
-    origem: "configuracao" as const,
+    vendedores: inteiroDoAmbiente("DIALYS_EQUIPE_VENDEDORES"),
+    contasSobGestao: inteiroDoAmbiente("DIALYS_CARTEIRA_CONTAS"),
   };
 }

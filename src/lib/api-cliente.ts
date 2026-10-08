@@ -4,9 +4,9 @@ import type { ErroApi, InsightApi, ListaInsightsApi, ReuniaoApi, SincronizacaoCr
 import type { ConversaApi, MensagemAssistenteApi, RespostaMensagemApi } from "@/server/api/assistente";
 import type { ResumoCarteira } from "@/server/insights/resumo";
 import type { ClienteResumo } from "@/server/clientes/clientes";
-import type { AlteracaoCompromisso, Compromisso, ListaAgendaApi, ModoDados, NovoCompromisso } from "@/lib/agenda";
+import type { AlteracaoCompromisso, Compromisso, ListaAgendaApi, NovoCompromisso } from "@/lib/agenda";
 
-export type ListaClientesApi = { modo: ModoDados; dados: ClienteResumo[]; paginacao: { total: number; limite: number; offset: number } };
+export type ListaClientesApi = { dados: ClienteResumo[]; paginacao: { total: number; limite: number; offset: number } };
 
 export type { ClienteResumo, Compromisso, ListaAgendaApi };
 export type { ConversaApi, InsightApi, ListaInsightsApi, MensagemAssistenteApi, RespostaMensagemApi, ReuniaoApi, ResumoCarteira, SincronizacaoCrmApi };
@@ -82,16 +82,15 @@ export const api = {
   criarCompromisso: (corpo: NovoCompromisso) => chamar<Compromisso>("/api/v1/agenda", postJson(corpo)),
   alterarCompromisso: (id: string, corpo: AlteracaoCompromisso) =>
     chamar<Compromisso>(`/api/v1/agenda/${encodeURIComponent(id)}`, { ...postJson(corpo), method: "PATCH" }),
-  /** Tira o cliente só da carteira do usuário da sessão (não apaga nada). */
+  /** Tira o cliente da carteira do usuário e remove os insights dele (remoção lógica). */
   removerDaCarteira: (contaId: string) =>
-    chamar<{ removido: true; cliente: { id: string; nome: string } }>(`/api/v1/carteira/${encodeURIComponent(contaId)}`, { method: "DELETE" }),
+    chamar<{ removido: true; cliente: { id: string; nome: string }; reunioesComInsightsRemovidos: number }>(`/api/v1/carteira/${encodeURIComponent(contaId)}`, { method: "DELETE" }),
   /** Remoção lógica da transcrição de uma reunião (e da análise derivada só dela). */
   removerTranscricao: (reuniaoId: string) =>
     chamar<{ reuniaoId: string; codigo: string; conta: { id: string; nome: string }; transcricaoRemovidaEm: string | null; jaRemovida: boolean }>(
       `/api/v1/reunioes/${encodeURIComponent(reuniaoId)}/transcricao`,
       { method: "DELETE" },
     ),
-  restaurarDemonstracao: () => chamar<{ restaurado: true; compromissos: number }>("/api/v1/agenda/demonstracao", { method: "POST" }),
 };
 
 /**

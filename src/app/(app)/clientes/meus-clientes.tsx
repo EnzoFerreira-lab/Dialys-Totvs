@@ -36,7 +36,7 @@ function Situacao({ situacao }: { situacao: ClienteResumo["situacao"] }) {
   );
 }
 
-type Estado = { clientes: ClienteResumo[]; total: number; demonstracao: boolean; termo: string };
+type Estado = { clientes: ClienteResumo[]; total: number; termo: string };
 
 /** Lista compacta da carteira do usuário (o servidor filtra pelo escopo dele), com busca e "Carregar mais". */
 export function MeusClientes() {
@@ -45,19 +45,13 @@ export function MeusClientes() {
   const [estado, setEstado] = useState<Estado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregandoMais, setCarregandoMais] = useState(false);
-  /** Incrementado quando a carteira muda fora daqui ("Restaurar demonstração"): refaz a busca. */
-  const [versao, setVersao] = useState(0);
+
   const [removendo, setRemovendo] = useState<ClienteResumo | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erroRemocao, setErroRemocao] = useState<string | null>(null);
   /** Trava síncrona contra clique duplo em "Remover". */
   const removendoAgora = useRef(false);
 
-  useEffect(() => {
-    const aoMudar = () => setVersao((v) => v + 1);
-    window.addEventListener(EVENTO_CARTEIRA_ALTERADA, aoMudar);
-    return () => window.removeEventListener(EVENTO_CARTEIRA_ALTERADA, aoMudar);
-  }, []);
 
   // Busca no servidor, com uma pausa curta enquanto a pessoa digita.
   useEffect(() => {
@@ -68,7 +62,7 @@ export function MeusClientes() {
         try {
           const lista = await api.listarClientes({ busca: termo, limite: POR_PAGINA });
           if (valido) {
-            setEstado({ clientes: lista.dados, total: lista.paginacao.total, demonstracao: lista.modo === "demonstracao", termo });
+            setEstado({ clientes: lista.dados, total: lista.paginacao.total, termo });
             setErro(null);
           }
         } catch (falha) {
@@ -81,24 +75,28 @@ export function MeusClientes() {
       valido = false;
       window.clearTimeout(timer);
     };
-  }, [busca, versao]);
+  }, [busca]);
 
-  /** Tira o cliente só da carteira deste usuário (DELETE /api/v1/carteira/{id}); histórico e reuniões ficam. */
+  /** Tira o cliente da carteira e remove os insights dele (DELETE /api/v1/carteira/{id}). */
   async function remover() {
     if (!removendo || removendoAgora.current) return;
     removendoAgora.current = true;
     setOcupado(true);
     setErroRemocao(null);
     try {
-      await api.removerDaCarteira(removendo.id);
+      const resposta = await api.removerDaCarteira(removendo.id);
       const removido = removendo;
       // Atualiza a lista na hora; "Carregar mais" continua do ponto certo porque o servidor também já não o conta.
       setEstado((atual) =>
         atual ? { ...atual, clientes: atual.clientes.filter((c) => c.id !== removido.id), total: Math.max(0, atual.total - 1) } : atual,
       );
       setRemovendo(null);
-      window.dispatchEvent(new Event(EVENTO_CARTEIRA_ALTERADA + ":agenda"));
-      toast({ titulo: "Cliente removido da sua carteira", descricao: `${removido.nome} saiu de "Meus clientes". Reuniões, transcrições e compromissos continuam disponíveis.` });
+      window.dispatchEvent(new Event(EVENTO_CARTEIRA_ALTERADA));
+      const n = resposta.reunioesComInsightsRemovidos;
+      toast({
+        titulo: "Cliente removido",
+        descricao: `${removido.nome} saiu de "Meus clientes"${n ? ` e os insights de ${n} ${n === 1 ? "reunião" : "reuniões"} foram removidos` : ""}. Os compromissos já marcados continuam na agenda.`,
+      });
     } catch (falha) {
       // Erro fica no modal: nada foi removido.
       setErroRemocao(falha instanceof ErroDaApi ? falha.message : "Não foi possível remover o cliente. Tente novamente.");
@@ -226,7 +224,7 @@ export function MeusClientes() {
       <ModalConfirmacao
         aberto={Boolean(removendo)}
         rotulo="Meus clientes"
-        titulo={`Remover ${removendo?.nome ?? "cliente"} da sua carteira?`}
+        titulo={`Remover ${removendo?.nome ?? "cliente"}?`}
         rotuloConfirmar="Remover"
         rotuloOcupado="Removendo..."
         perigo
@@ -235,8 +233,9 @@ export function MeusClientes() {
         onCancelar={() => setRemovendo(null)}
       >
         <p>
-          <strong className="font-semibold">{removendo?.nome}</strong> deixa de aparecer em “Meus clientes” só para você. O cadastro, as
-          reuniões, as transcrições, o histórico e os compromissos já marcados continuam como estão, e a carteira de outros usuários não muda.
+          <strong className="font-semibold">{removendo?.nome}</strong> sai de “Meus clientes” e os insights dele (sinais, evidências,
+          diagnósticos e ações sugeridas) deixam de aparecer na Central de Insights, no Dashboard, nos indicadores e nas respostas do
+          Dialys. Os compromissos já marcados continuam na agenda.
         </p>
         {erroRemocao ? (
           <p role="alert" className="mt-3 text-[13px] text-support-error">

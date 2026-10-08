@@ -1,4 +1,4 @@
-// Contrato entre o serviço do assistente e quem gera a resposta (Claude ou demonstração por regras).
+// Contrato entre o serviço do assistente e quem gera a resposta (Claude ou regras locais).
 // O motor recebe a pergunta, o histórico e o foco da conversa, e só lê dados por `consultar`, que o
 // serviço já amarrou ao usuário autenticado. Texto entra, texto sai: um canal de voz futuro troca só
 // as pontas (fala → texto e texto → fala), sem mexer aqui.
@@ -20,8 +20,6 @@ export type CompromissoEmFoco = {
   local: string | null;
   observacoes: string | null;
   cliente: { id: string; nome: string; temReunioesAnalisadas: boolean } | null;
-  /** Compromisso fictício da agenda de demonstração. */
-  demonstracao: boolean;
 };
 
 export type EntradaMotor = {

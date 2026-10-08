@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     const offset = inteiro(params.get("offset"), 0, 0, 100_000);
     if (limite === null || offset === null) return erro(400, "PAGINACAO_INVALIDA", "Use limite entre 1 e 50 e offset a partir de 0.", requestId);
     const busca = (params.get("busca") ?? "").slice(0, 100);
-    const { modo, clientes, total } = await listarClientes(usuario, { busca, limite, offset });
-    return json({ modo, dados: clientes, paginacao: { total, limite, offset } }, 200, requestId);
+    const { clientes, total } = await listarClientes(usuario, { busca, limite, offset });
+    return json({ dados: clientes, paginacao: { total, limite, offset } }, 200, requestId);
   });
 }

@@ -23,15 +23,12 @@ export type Compromisso = {
   status: StatusCompromisso;
   local: string | null;
   observacoes: string | null;
-  origem: "demonstracao" | "usuario";
+  origem: "usuario";
   criadoEm: string;
   atualizadoEm: string;
 };
 
-export type ModoDados = "demonstracao" | "real";
-
 export type ListaAgendaApi = {
-  modo: ModoDados;
   fuso: string;
   /** Data de hoje ("AAAA-MM-DD") no fuso configurado, segundo o relógio do servidor. */
   hoje: string;

@@ -67,6 +67,8 @@ export type ContaInsight = {
   produtos: MencaoProduto[];
   evidencias: Evidencia[];
   diagnostico: string;
+  /** false: diagnóstico e recomendação vieram das regras locais (sem chave do Claude), não de IA. */
+  geradoPorIa: boolean;
   acao: string;
   proximosPassos: string[];
   /** Saúde 0–10 da reunião exibida (src/lib/saude.ts) e força da relação na última conversa. */

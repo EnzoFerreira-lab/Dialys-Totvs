@@ -8,18 +8,15 @@ import {
   NovoCompromissoSchema,
   terminoDepoisDoInicio,
   type Compromisso,
-  type ModoDados,
 } from "@/lib/agenda";
 import { dataNoFuso, paraInstante, somarDias, type DataCivil } from "@/lib/fuso";
 import type { Usuario } from "../auth/usuarios";
 import { buscarCliente } from "../clientes/clientes";
-import { fusoHorario, usarDadosDemonstracao } from "../config/dados";
+import { fusoHorario } from "../config/dados";
 import type { CompromissoRegistro } from "../db/banco";
-import { repositorioDemonstracao, repositorioReal, restaurarAgendaDemonstracao, type RepositorioAgenda } from "./repositorio";
+import { repositorioAgenda } from "./repositorio";
 
-export const modoAgenda = (): ModoDados => (usarDadosDemonstracao() ? "demonstracao" : "real");
-
-const repositorio = (): RepositorioAgenda => (usarDadosDemonstracao() ? repositorioDemonstracao(fusoHorario()) : repositorioReal);
+const repositorio = () => repositorioAgenda;
 
 export function serializarCompromisso(registro: CompromissoRegistro): Compromisso {
   return {
@@ -161,10 +158,4 @@ export async function atualizarCompromisso(usuario: Usuario, id: string, entrada
   });
   if (!atualizado) throw new ErroAgenda("COMPROMISSO_NAO_ENCONTRADO", 404, "Compromisso não encontrado.");
   return serializarCompromisso(atualizado);
-}
-
-/** Só no modo demonstração: volta a agenda fictícia do usuário ao estado inicial. */
-export async function restaurarDemonstracao(usuario: Usuario) {
-  if (!usarDadosDemonstracao()) throw new ErroAgenda("FORA_DA_DEMONSTRACAO", 409, "A agenda não está no modo demonstração.");
-  return restaurarAgendaDemonstracao(usuario.id, fusoHorario());
 }

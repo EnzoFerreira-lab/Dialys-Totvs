@@ -311,7 +311,6 @@ export function PainelExecutivo() {
             <p>
               {visiveis.length} {visiveis.length === 1 ? "alerta em destaque" : "alertas em destaque"}
               {totais[filtro] > visiveis.length ? ` de ${totais[filtro]}` : ""}
-              {resumo.modoAnalise === "demonstracao" ? " · Análise em modo demonstração" : ""}
             </p>
             <p className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#24A148] motion-safe:animate-pulse" aria-hidden="true" />

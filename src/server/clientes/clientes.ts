@@ -1,21 +1,16 @@
 // "Meus clientes": a carteira do usuário autenticado, filtrada pelo escopo dele no servidor.
 // Dois conceitos:
-//   cadastro  clientes que o usuário pode ver (escopo de acesso). Fonte:
-//               demonstração  carteira fictícia (src/lib/mock/contas.ts) + contas já analisadas pelo Dialys;
-//               real          contas analisadas, até a empresa ligar a base dela aqui (cadastroReal).
+//   cadastro  clientes que o usuário pode ver: as contas com reunião analisada pelo Dialys, mais a base
+//             da empresa quando ela for ligada aqui (cadastroReal).
 //   carteira  o cadastro menos os clientes que o próprio usuário removeu ("Remover cliente"). Remover
-//             não apaga o cliente, as reuniões, as transcrições nem o histórico, e não mexe na carteira
-//             de outros usuários: só grava a remoção (demonstração: .dialys/demonstracao.json; real:
-//             tabela carteira_remocao do banco).
+//             também tira os insights do cliente (remoção lógica nas reuniões dele, ver repositorio.ts);
+//             nada é apagado do banco e `devolverACarteira` desfaz.
 // A situação vem da saúde calculada nas reuniões analisadas; sem reunião analisada, situacao = null
 // ("Sem avaliação"), que é diferente de "Saudável".
-import { CONTAS_MOCK } from "@/lib/mock/contas";
 import { normalizarBusca } from "@/lib/formatar";
 import type { FaixaSaude } from "@/lib/saude";
 import { podeAcessarConta, type Usuario } from "../auth/usuarios";
-import { usarDadosDemonstracao } from "../config/dados";
-import { demonstracao, doUsuario } from "../db/demonstracao";
-import { desfazerRemocaoCarteira, listarRemocoesCarteira, registrarRemocaoCarteira } from "../db/repositorio";
+import { desfazerRemocaoCarteira, listarRemocoesCarteira, nomeDoClienteNasReunioes, registrarRemocaoCarteira } from "../db/repositorio";
 import { listarContasInsight } from "../insights/contas";
 
 export type ClienteResumo = {
@@ -29,7 +24,7 @@ type ClienteCadastro = { id: string; nome: string; segmento?: string };
 
 /**
  * Ponto de integração com a base da empresa (CRM/ERP): devolver aqui a carteira real (id = chave da
- * conta usada nas reuniões). Enquanto não houver, a carteira real são as contas analisadas.
+ * conta usada nas reuniões). Enquanto não houver, a carteira são as contas analisadas.
  */
 async function cadastroReal(): Promise<ClienteCadastro[]> {
   return [];
@@ -39,7 +34,7 @@ async function cadastroReal(): Promise<ClienteCadastro[]> {
 async function cadastroDoUsuario(usuario: Usuario): Promise<ClienteResumo[]> {
   const analisadas = await listarContasInsight();
   const porId = new Map(analisadas.map((conta) => [conta.id, conta]));
-  const cadastro: ClienteCadastro[] = usarDadosDemonstracao() ? CONTAS_MOCK : await cadastroReal();
+  const cadastro = await cadastroReal();
   const noCadastro = new Set(cadastro.map((c) => c.id));
   // Contas enviadas pelo /envio fora do cadastro também são clientes do usuário (se ele pode vê-las).
   const todos = [...cadastro, ...analisadas.filter((a) => !noCadastro.has(a.id)).map((a) => ({ id: a.id, nome: a.nome, segmento: a.segmento }))];
@@ -57,15 +52,8 @@ async function cadastroDoUsuario(usuario: Usuario): Promise<ClienteResumo[]> {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
-/** Ids que o usuário tirou da própria carteira, na fonte de dados ativa. */
-async function removidosDoUsuario(usuario: Usuario): Promise<Set<string>> {
-  if (!usarDadosDemonstracao()) return listarRemocoesCarteira(usuario.id);
-  const carteira = doUsuario((await demonstracao.ler()).carteiras, usuario.id);
-  return new Set(carteira?.removidos.map((r) => r.contaId) ?? []);
-}
-
 async function carteiraDoUsuario(usuario: Usuario): Promise<ClienteResumo[]> {
-  const [cadastro, removidos] = await Promise.all([cadastroDoUsuario(usuario), removidosDoUsuario(usuario)]);
+  const [cadastro, removidos] = await Promise.all([cadastroDoUsuario(usuario), listarRemocoesCarteira(usuario.id)]);
   return cadastro.filter((c) => !removidos.has(c.id));
 }
 
@@ -77,11 +65,7 @@ export async function listarClientes(usuario: Usuario, opcoes: { busca?: string;
   const filtrados = termo ? todos.filter((c) => normalizarBusca(c.nome).includes(termo)) : todos;
   const offset = opcoes.offset ?? 0;
   const limite = opcoes.limite ?? LIMITE_CLIENTES;
-  return {
-    modo: usarDadosDemonstracao() ? ("demonstracao" as const) : ("real" as const),
-    clientes: filtrados.slice(offset, offset + limite),
-    total: filtrados.length,
-  };
+  return { clientes: filtrados.slice(offset, offset + limite), total: filtrados.length };
 }
 
 /** Cliente da carteira do usuário, ou null (inexistente, fora do escopo ou removido: mesma resposta). */
@@ -91,41 +75,29 @@ export async function buscarCliente(usuario: Usuario, id: string): Promise<Clien
 
 /**
  * Cliente que o usuário pode ver, esteja ou não na carteira dele. Para exibir o que já existe (Central,
- * compromissos antigos): tirar da carteira não esconde o histórico.
+ * compromissos antigos).
  */
 export async function buscarClienteNoCadastro(usuario: Usuario, id: string): Promise<ClienteResumo | null> {
   return (await cadastroDoUsuario(usuario)).find((c) => c.id === id) ?? null;
 }
 
 /**
- * "Remover cliente": tira o cliente da carteira do usuário autenticado, na fonte de dados ativa. Não
- * apaga nada nem afeta outros usuários. null: cliente fora da carteira (inexistente, sem acesso ou já removido).
+ * "Remover cliente": tira o cliente da carteira do usuário autenticado e remove os insights dele
+ * (Central, Dashboard, indicadores e assistente). null: cliente fora da carteira (inexistente, sem
+ * acesso ou já removido).
  */
-export async function removerDaCarteira(usuario: Usuario, contaId: string): Promise<ClienteResumo | null> {
+export async function removerDaCarteira(usuario: Usuario, contaId: string) {
   const cliente = await buscarCliente(usuario, contaId);
   if (!cliente) return null;
-  if (usarDadosDemonstracao()) {
-    await demonstracao.transacao((dados) => {
-      const carteira = (dados.carteiras[usuario.id] ??= { removidos: [] });
-      if (!carteira.removidos.some((r) => r.contaId === contaId)) carteira.removidos.push({ contaId, removidoEm: new Date().toISOString() });
-    });
-  } else {
-    await registrarRemocaoCarteira(usuario.id, contaId);
-  }
-  return cliente;
+  const { reunioes } = await registrarRemocaoCarteira(usuario.id, contaId);
+  return { cliente, reunioesComInsightsRemovidos: reunioes };
 }
 
-/** Devolve à carteira um cliente removido. null: cliente fora do cadastro do usuário. */
-export async function devolverACarteira(usuario: Usuario, contaId: string): Promise<ClienteResumo | null> {
-  const cliente = await buscarClienteNoCadastro(usuario, contaId);
-  if (!cliente) return null;
-  if (usarDadosDemonstracao()) {
-    await demonstracao.transacao((dados) => {
-      const carteira = doUsuario(dados.carteiras, usuario.id);
-      if (carteira) carteira.removidos = carteira.removidos.filter((r) => r.contaId !== contaId);
-    });
-  } else {
-    await desfazerRemocaoCarteira(usuario.id, contaId);
-  }
-  return cliente;
+/** Devolve à carteira um cliente removido e reativa os insights dele. null: cliente desconhecido ou sem acesso. */
+export async function devolverACarteira(usuario: Usuario, contaId: string) {
+  if (!podeAcessarConta(usuario, contaId)) return null;
+  const nome = (await buscarClienteNoCadastro(usuario, contaId))?.nome ?? (await nomeDoClienteNasReunioes(contaId));
+  if (!nome) return null;
+  const { reunioes } = await desfazerRemocaoCarteira(usuario.id, contaId);
+  return { cliente: { id: contaId, nome }, reunioesComInsightsReativados: reunioes };
 }

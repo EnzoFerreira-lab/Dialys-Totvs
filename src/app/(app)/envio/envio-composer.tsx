@@ -7,15 +7,13 @@ import {
   DocumentImport,
   Launch,
   Locked,
-  Microphone,
-  MicrophoneFilled,
   Tag,
   WarningFilled,
 } from "@carbon/icons-react";
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { CONTAS_MOCK, type ContaResumo } from "@/lib/mock/contas";
+import type { ContaResumo } from "@/lib/contas";
 import {
   descreverContexto,
   extrairReunioes,
@@ -27,7 +25,7 @@ import {
 import { carregarExemplo } from "./actions";
 import { SeletorConta } from "./seletor-conta";
 
-const EXTENSOES_ACEITAS = [".txt", ".json", ".pdf", ".docx", ".mp3", ".wav"];
+const EXTENSOES_ACEITAS = [".txt", ".json", ".pdf", ".docx"];
 const TAMANHO_MAXIMO = 20 * 1024 * 1024;
 
 const extensaoDe = (nome: string) => nome.slice(nome.lastIndexOf(".")).toLowerCase();
@@ -38,73 +36,9 @@ function formatarTamanho(bytes: number) {
 }
 
 function validarArquivo(arquivo: File): string | null {
-  if (!EXTENSOES_ACEITAS.includes(extensaoDe(arquivo.name))) return "Formato não suportado. Use TXT, JSON, PDF, DOCX, MP3 ou WAV.";
+  if (!EXTENSOES_ACEITAS.includes(extensaoDe(arquivo.name))) return "Formato não suportado. Use TXT, JSON da TOTVS, PDF ou DOCX.";
   if (arquivo.size > TAMANHO_MAXIMO) return "Arquivo acima de 20 MB.";
   return null;
-}
-
-/* ---------- Ditado por voz (Web Speech API) ---------- */
-
-type ReconhecimentoVoz = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-};
-
-type JanelaComVoz = Window & {
-  SpeechRecognition?: new () => ReconhecimentoVoz;
-  webkitSpeechRecognition?: new () => ReconhecimentoVoz;
-};
-
-function useDitado(onTexto: (texto: string) => void) {
-  const [suportado, setSuportado] = useState(false);
-  const [gravando, setGravando] = useState(false);
-  const reconhecimento = useRef<ReconhecimentoVoz | null>(null);
-  const onTextoRef = useRef(onTexto);
-
-  useEffect(() => {
-    onTextoRef.current = onTexto;
-  }, [onTexto]);
-
-  useEffect(() => {
-    const janela = window as JanelaComVoz;
-    const Construtor = janela.SpeechRecognition ?? janela.webkitSpeechRecognition;
-    if (!Construtor) return;
-    const instancia = new Construtor();
-    instancia.lang = "pt-BR";
-    instancia.continuous = true;
-    instancia.interimResults = false;
-    instancia.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) onTextoRef.current(event.results[i][0].transcript.trim());
-      }
-    };
-    instancia.onend = () => setGravando(false);
-    instancia.onerror = () => setGravando(false);
-    reconhecimento.current = instancia;
-    // Detecção de recurso do navegador: só é conhecida após a montagem no cliente.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSuportado(true);
-    return () => instancia.stop();
-  }, []);
-
-  function alternar() {
-    const instancia = reconhecimento.current;
-    if (!instancia) return;
-    if (gravando) {
-      instancia.stop();
-    } else {
-      instancia.start();
-      setGravando(true);
-    }
-  }
-
-  return { suportado, gravando, alternar };
 }
 
 /* ---------- Compositor ---------- */
@@ -266,7 +200,7 @@ function SeletorReunioes({
   );
 }
 
-/** Por enquanto só texto é analisado; PDF, DOCX e áudio dependem do pipeline de transcrição (T05/T06). */
+/** Por enquanto só texto é analisado; PDF e DOCX dependem da extração de texto (T05). */
 const EXTENSOES_ANALISAVEIS = [".txt"];
 
 export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComposerProps) {
@@ -282,17 +216,13 @@ export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComp
   const textareaId = useId();
   const ajudaId = useId();
 
-  const ditado = useDitado((trecho) =>
-    setTexto((atual) => (atual.trim() ? `${atual.trimEnd()} ${trecho}` : trecho)),
-  );
-
   const textarea = useRef<HTMLTextAreaElement>(null);
   const temConteudo = texto.trim().length > 0 || arquivo !== null;
 
-  function carregarReuniao(reuniao: { transcricao: string; contexto?: ContextoReuniao }, contaId?: string) {
+  function carregarReuniao(reuniao: { transcricao: string; contexto?: ContextoReuniao }) {
     setTexto(reuniao.transcricao);
     setContexto(reuniao.contexto ?? null);
-    setConta(CONTAS_MOCK.find((item) => item.id === contaId) ?? null);
+    setConta(null);
     setArquivo(null);
     setImportadas(null);
     setErro(null);
@@ -337,7 +267,7 @@ export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComp
     setCarregandoExemplo(true);
     try {
       const completo = await carregarExemplo(exemplo.id);
-      if (completo) carregarReuniao(completo, completo.contaId);
+      if (completo) carregarReuniao(completo);
       else setErro("Não foi possível carregar este exemplo.");
     } catch {
       setErro("Não foi possível carregar este exemplo.");
@@ -376,7 +306,7 @@ export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComp
     if (arquivo) {
       if (!EXTENSOES_ANALISAVEIS.includes(extensaoDe(arquivo.name))) {
         setErro(
-          "Por enquanto a análise lê texto colado e arquivos .txt. PDF, DOCX e áudio entram com o pipeline de transcrição.",
+          "Por enquanto a análise lê texto colado, arquivos .txt e o JSON da TOTVS. PDF e DOCX entram com a extração de texto.",
         );
         return;
       }
@@ -501,29 +431,12 @@ export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComp
             onClick={() => inputArquivo.current?.click()}
             className="flex h-8 w-8 items-center justify-center rounded-[4px] text-text-primary hover:bg-[#F2F2F2]"
             aria-label="Anexar arquivo"
-            title="Anexar arquivo (TXT, JSON da TOTVS, PDF, DOCX, MP3, WAV)"
+            title="Anexar arquivo (TXT ou JSON da TOTVS)"
           >
             <Add size={20} />
           </button>
 
           <SeletorConta conta={conta} onChange={setConta} />
-
-          <span className="mx-2 h-4 w-px bg-[#C6C6C6]" aria-hidden="true" />
-
-          <button
-            type="button"
-            onClick={ditado.alternar}
-            disabled={!ditado.suportado}
-            aria-pressed={ditado.gravando}
-            aria-label={ditado.gravando ? "Parar nota de voz" : "Gravar nota de voz"}
-            title={ditado.suportado ? "Nota de voz" : "Nota de voz indisponível neste navegador"}
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-[#F2F2F2] disabled:cursor-not-allowed disabled:text-text-placeholder disabled:hover:bg-transparent",
-              ditado.gravando ? "text-support-error" : "text-text-primary",
-            )}
-          >
-            {ditado.gravando ? <MicrophoneFilled size={16} className="motion-safe:animate-pulse" /> : <Microphone size={16} />}
-          </button>
 
           {exemplos.length > 0 ? (
             <MenuExemplos exemplos={exemplos} carregando={carregandoExemplo} onEscolher={escolherExemplo} />

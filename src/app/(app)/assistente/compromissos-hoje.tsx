@@ -18,9 +18,6 @@ export function CompromissosHoje({ agenda }: { agenda: ListaAgendaApi }) {
       <h2 id="titulo-compromissos-hoje" className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-5 py-4 text-[15px] leading-5 font-semibold text-text-primary">
         <Calendar size={16} aria-hidden="true" />
         Compromissos de hoje
-        {agenda.modo === "demonstracao" ? (
-          <span className="rounded-full bg-[#FFF2E0] px-2 py-px text-[10px] font-medium text-[#8A5A00]">Demonstração</span>
-        ) : null}
       </h2>
       {dados.length === 0 ? (
         <p className="px-5 py-6 text-center text-[13px] text-text-secondary">Nenhum compromisso hoje.</p>

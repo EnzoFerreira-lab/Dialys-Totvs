@@ -1,5 +1,6 @@
 // Operações de dados do Dialys. Único ponto que conhece o formato das tabelas.
 import { randomUUID } from "node:crypto";
+import { chaveConta, nomeConta } from "@/lib/insights";
 import type { ResultadoAnalise } from "../ai/analisar-reuniao";
 import type { Severidade, TipoSinal } from "../ai/schemas";
 import {
@@ -62,9 +63,14 @@ export async function removerTranscricao(reuniaoId: string, usuarioId: string) {
   });
 }
 
-/** Reuniões concluídas cuja transcrição foi removida: a Central mantém a linha e o código, sem a análise. */
+/**
+ * Reuniões concluídas cuja transcrição foi removida pela Central: a linha e o código ficam, sem a análise.
+ * As que saíram junto com o cliente ("Remover cliente") não voltam aqui: somem da Central.
+ */
 export async function listarReunioesSemTranscricao(): Promise<ReuniaoRegistro[]> {
-  return (await lerBanco()).reuniao.filter((r) => r.status === "CONCLUIDA" && r.transcricaoRemovida);
+  return (await lerBanco()).reuniao.filter(
+    (r) => r.status === "CONCLUIDA" && r.transcricaoRemovida && r.transcricaoRemovida.motivo !== "cliente_removido",
+  );
 }
 
 /* ---------- Carteira do usuário (dados reais) ---------- */
@@ -73,22 +79,48 @@ export async function listarRemocoesCarteira(usuarioId: string): Promise<Set<str
   return new Set((await lerBanco()).carteira_remocao.filter((r) => r.usuarioId === usuarioId).map((r) => r.contaId));
 }
 
-/** Tira o cliente da carteira do usuário (só dele). Idempotente; devolve false se já estava fora. */
+/**
+ * "Remover cliente": tira o cliente da carteira do usuário e remove os insights dele, numa transação.
+ * Os insights saem por remoção lógica nas reuniões do cliente (motivo "cliente_removido"): somem da
+ * Central, do Dashboard, dos indicadores e do assistente para todos, mas nada é apagado do banco e
+ * `desfazerRemocaoCarteira` traz tudo de volta. Devolve quantas reuniões tiveram os insights removidos.
+ */
 export async function registrarRemocaoCarteira(usuarioId: string, contaId: string) {
   return transacao((banco) => {
-    if (banco.carteira_remocao.some((r) => r.usuarioId === usuarioId && r.contaId === contaId)) return false;
-    banco.carteira_remocao.push({ usuarioId, contaId, removidoEm: agora() });
-    return true;
+    if (!banco.carteira_remocao.some((r) => r.usuarioId === usuarioId && r.contaId === contaId)) {
+      banco.carteira_remocao.push({ usuarioId, contaId, removidoEm: agora() });
+    }
+    const em = agora();
+    let reunioes = 0;
+    for (const reuniao of banco.reuniao) {
+      if (chaveConta(reuniao) !== contaId || reuniao.transcricaoRemovida || reuniao.status === "EM_PROCESSAMENTO") continue;
+      reuniao.transcricaoRemovida = { em, usuarioId, motivo: "cliente_removido" };
+      reuniao.atualizadaEm = em;
+      reunioes++;
+    }
+    return { reunioes };
   });
 }
 
-/** Devolve o cliente à carteira do usuário. */
+/** Devolve o cliente à carteira do usuário e reativa os insights que saíram junto com ele. */
 export async function desfazerRemocaoCarteira(usuarioId: string, contaId: string) {
   return transacao((banco) => {
-    const antes = banco.carteira_remocao.length;
     banco.carteira_remocao = banco.carteira_remocao.filter((r) => !(r.usuarioId === usuarioId && r.contaId === contaId));
-    return banco.carteira_remocao.length < antes;
+    let reunioes = 0;
+    for (const reuniao of banco.reuniao) {
+      if (chaveConta(reuniao) !== contaId || reuniao.transcricaoRemovida?.motivo !== "cliente_removido") continue;
+      delete reuniao.transcricaoRemovida;
+      reuniao.atualizadaEm = agora();
+      reunioes++;
+    }
+    return { reunioes };
   });
+}
+
+/** Nome do cliente pelas reuniões dele (inclusive as com insights removidos), para devolvê-lo à carteira. */
+export async function nomeDoClienteNasReunioes(contaId: string): Promise<string | null> {
+  const reuniao = (await lerBanco()).reuniao.find((r) => chaveConta(r) === contaId);
+  return reuniao ? nomeConta(reuniao) : null;
 }
 
 export async function buscarReuniao(id: string): Promise<ReuniaoRegistro | null> {

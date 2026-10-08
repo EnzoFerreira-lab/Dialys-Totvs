@@ -1,4 +1,4 @@
-// Motor do assistente sem IA (DIALYS_MODO_DEMO=true ou sem chave): entende perguntas comuns por regras
+// Motor do assistente sem IA (reserva quando não há chave do Claude, ou DIALYS_MODO_DEMO=true): entende perguntas comuns por regras
 // e responde SÓ com o que as consultas controladas devolvem, nas mesmas regras do motor Claude (fontes,
 // ambiguidade, limitações, procedência). A interface marca essas respostas como "sem IA".
 import { normalizarBusca } from "@/lib/formatar";
@@ -56,15 +56,6 @@ export function interpretarPeriodo(pergunta: string, agora: Date): Periodo | nul
 
 type Dados = Record<string, unknown>;
 const lista = (itens: string[]) => itens.map((i) => `- ${i}`).join("\n");
-const AVISO_SIMULADA = "_Análise gerada em modo demonstração, sem IA._";
-const AVISO_CENARIO = "_Empresa fictícia de um cenário de demonstração; análise gerada sem IA._";
-
-function avisoProcedencia(itens: Array<{ procedencia?: { analiseSimulada: boolean; cenarioRoteirizado: boolean } | null }>) {
-  if (itens.some((i) => i.procedencia?.cenarioRoteirizado)) return `\n\n${AVISO_CENARIO}`;
-  if (itens.some((i) => i.procedencia?.analiseSimulada)) return `\n\n${AVISO_SIMULADA}`;
-  return "";
-}
-
 /** Reunião como o usuário a vê na Central: código e data (ou o aviso de data não informada). */
 const reuniaoTexto = (r: Dados | null | undefined) =>
   r ? `${r.codigo ? `${String(r.codigo)}, ` : ""}${r.dataInformada === false ? "data não informada" : dataBr(String(r.data))}` : "";
@@ -181,7 +172,7 @@ export function criarMotorDemonstracao(): MotorAssistente {
         const base = textoAcoes(r);
         return {
           texto: intencao.novaSugestao
-            ? `${base}\n\n**Sugestão adicional do Dialys:** no modo demonstração (sem IA) eu não crio sugestões novas; mostro só as ações registradas na análise. Com a IA ligada, eu proporia uma sugestão separada destas.`
+            ? `${base}\n\n**Sugestão adicional do Dialys:** sem a IA ligada eu não crio sugestões novas; mostro só as ações registradas na análise. Com a IA ligada, eu proporia uma sugestão separada destas.`
             : base,
         };
       }
@@ -256,7 +247,7 @@ function textoReunioes(r: ResultadoFerramenta, p: Periodo | null, empresa: strin
     const e = x.empresa as Dados;
     return `**${e.nome}**, ${reuniaoTexto(x)}: ${String(x.resumo)} (${x.sinais} sinal(is))`;
   });
-  return `Encontrei ${r.dados.total} reunião(ões) analisada(s)${alvo}:\n${lista(itens)}${parcial(r.dados, reunioes.length)}${avisoProcedencia(reunioes as never)}`;
+  return `Encontrei ${r.dados.total} reunião(ões) analisada(s)${alvo}:\n${lista(itens)}${parcial(r.dados, reunioes.length)}`;
 }
 
 function textoEmpresa(r: ResultadoFerramenta) {
@@ -268,7 +259,7 @@ function textoEmpresa(r: ResultadoFerramenta) {
   const s = e.sinaisUltimaReuniao as Record<string, number>;
   return `**${e.nome}**${e.segmento ? ` (${e.segmento})` : ""}: criticidade **${e.criticidade}**, ${e.reunioesAnalisadas} reunião(ões) analisada(s)${
     ultima ? `, a última (${reuniaoTexto(ultima)})` : ""
-  }${e.nps !== null ? `, NPS ${e.nps}` : ""}.\n\nNa última reunião: ${s.risco_churn} risco(s) de churn, ${s.oportunidade} oportunidade(s) e ${s.objecao} objeção(ões).\n\n**Diagnóstico registrado:** ${e.diagnosticoUltimaReuniao}${avisoProcedencia([e as never])}`;
+  }${e.nps !== null ? `, NPS ${e.nps}` : ""}.\n\nNa última reunião: ${s.risco_churn} risco(s) de churn, ${s.oportunidade} oportunidade(s) e ${s.objecao} objeção(ões).\n\n**Diagnóstico registrado:** ${e.diagnosticoUltimaReuniao}`;
 }
 
 function textoAtencao(r: ResultadoFerramenta) {
@@ -280,7 +271,7 @@ function textoAtencao(r: ResultadoFerramenta) {
     const ultima = e.ultimaReuniao as Dados | null;
     return `**${e.nome}**: criticidade ${e.criticidade}${ultima ? ` (${reuniaoTexto(ultima)})` : ""}. ${String(e.diagnosticoUltimaReuniao).split(". ")[0]}.`;
   });
-  return `${empresas.length} conta(s) precisam de atenção, da mais crítica para a menos:\n${lista(itens)}${avisoProcedencia(empresas as never)}`;
+  return `${empresas.length} conta(s) precisam de atenção, da mais crítica para a menos:\n${lista(itens)}`;
 }
 
 function textoInsights(r: ResultadoFerramenta, categoria: string) {
@@ -295,7 +286,7 @@ function textoInsights(r: ResultadoFerramenta, categoria: string) {
     const reu = i.reuniao as Dados;
     return `**${e.nome}** (${reuniaoTexto(reu)}), ${i.subtipo}, criticidade ${i.criticidade}: “${i.citacaoLiteral}”`;
   });
-  return `${r.dados.total} ${nome} ${registrados}:\n${lista(itens)}${parcial(r.dados, insights.length)}${avisoProcedencia(insights as never)}`;
+  return `${r.dados.total} ${nome} ${registrados}:\n${lista(itens)}${parcial(r.dados, insights.length)}`;
 }
 
 function textoAcoes(r: ResultadoFerramenta) {
@@ -311,7 +302,7 @@ function textoAcoes(r: ResultadoFerramenta) {
       passos.length ? `\nPróximos passos registrados:\n${lista(passos)}` : ""
     }\nEnviadas ao CRM: ${a.enviadasAoCrm}.`;
   });
-  return `${blocos.join("\n\n")}${parcial(r.dados, acoes.length)}\n\nEssas são as recomendações registradas na análise; o Dialys não registra se já foram executadas.${avisoProcedencia(acoes as never)}`;
+  return `${blocos.join("\n\n")}${parcial(r.dados, acoes.length)}\n\nEssas são as recomendações registradas na análise; o Dialys não registra se já foram executadas.`;
 }
 
 function textoDetalhes(r: ResultadoFerramenta) {
@@ -322,12 +313,11 @@ function textoDetalhes(r: ResultadoFerramenta) {
   const trechos = ((r.dados.trechosDaTranscricao as Dados[]) ?? []).map((t) => `${t.falante}: “${t.trecho}”`);
   return `**${e.nome}**, ${reuniaoTexto(reu)}.\n\n${r.dados.resumo}${
     trechos.length ? `\n\nO que o cliente disse (trechos literais):\n${lista(trechos)}` : "\n\nEssa reunião não tem trechos destacados."
-  }${avisoProcedencia([r.dados as never])}`;
+  }`;
 }
 
 /* ---------- Agenda ---------- */
 
-const AVISO_AGENDA_DEMO = "_Agenda de demonstração: compromissos fictícios._";
 const paragrafo = (texto: string | null | undefined) => (texto ? `\n\n${texto}` : "");
 
 function textoAgenda(r: ResultadoFerramenta, p: Periodo | null) {
@@ -335,8 +325,7 @@ function textoAgenda(r: ResultadoFerramenta, p: Periodo | null) {
   if (erro) return erro;
   const compromissos = (r.dados.compromissos as Dados[]) ?? [];
   const quando = p?.descricao ?? "hoje";
-  const aviso = paragrafo(r.dados.agendaDeDemonstracao ? AVISO_AGENDA_DEMO : null);
-  if (compromissos.length === 0) return `Você não tem compromissos na agenda ${quando}.${aviso}`;
+  if (compromissos.length === 0) return `Você não tem compromissos na agenda ${quando}.`;
   const variosDias = new Set(compromissos.map((c) => c.data)).size > 1;
   const itens = compromissos.map((c) => {
     const cliente = c.cliente as Dados | null;
@@ -345,13 +334,13 @@ function textoAgenda(r: ResultadoFerramenta, p: Periodo | null) {
   });
   return `**Compromissos** ${quando} (${r.dados.total}):\n${lista(itens)}${parcial(r.dados, compromissos.length)}${paragrafo(
     'Ações sugeridas pelo Dialys não aparecem aqui: elas não têm horário e não entram na agenda. Peça "quais ações devo priorizar?" para vê-las.',
-  )}${aviso}`;
+  )}`;
 }
 
 /** Preparação de um compromisso: só com o que as consultas devolvem; sem reunião analisada, diz isso. */
 async function textoPreparacao(c: CompromissoEmFoco, consultar: EntradaMotor["consultar"]) {
   const cabecalho = `**Preparação: ${c.titulo}**, ${dataBr(c.data)} das ${c.inicio} às ${c.fim}${c.cliente ? ` com **${c.cliente.nome}**` : ""}.`;
-  const fim = `${paragrafo(c.observacoes ? `**Suas observações:** ${c.observacoes}` : null)}${paragrafo(c.demonstracao ? AVISO_AGENDA_DEMO : null)}`;
+  const fim = `${paragrafo(c.observacoes ? `**Suas observações:** ${c.observacoes}` : null)}`;
   if (c.status === "cancelado") return `${cabecalho}${paragrafo("Este compromisso está cancelado.")}${fim}`;
   if (!c.cliente) {
     return `${cabecalho}${paragrafo("É um compromisso interno, sem cliente associado, então não há reuniões analisadas para consultar.")}${fim}`;
