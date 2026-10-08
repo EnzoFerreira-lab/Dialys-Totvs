@@ -471,7 +471,7 @@ export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComp
       ) : null}
 
       <div id={ajudaId} className="mt-2.5 flex flex-col gap-1 text-[11px] text-text-helper sm:flex-row sm:justify-between">
-        <p>Arraste um arquivo ou clique em + · TXT, JSON da TOTVS, PDF, DOCX, MP3, WAV · Até 20 MB</p>
+        <p>Arraste um arquivo ou clique em + · TXT, JSON, PDF, DOCX · Até 20 MB</p>
         <p className="flex items-center gap-1.5">
           <Locked size={12} aria-hidden="true" />
           Arquivos mantidos apenas nesta sessão
