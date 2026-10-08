@@ -35,7 +35,7 @@ export function LoginForm() {
           name="email"
           type="email"
           label="Usuário ou E-mail Corporativo"
-          placeholder="ricardo.alves@totvs.com.br"
+          placeholder="Digite seu E-mail"
           autoComplete="username"
         />
 
