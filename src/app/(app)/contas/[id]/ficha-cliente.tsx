@@ -186,7 +186,7 @@ export function FichaCliente({ perfil, fuso, hoje, agoraIso }: { perfil: PerfilC
                     setRemovendo(true);
                   }}
                 >
-                  Remover cliente
+                  Excluir cliente
                 </ItemMenu>
               )}
             </MenuSuspenso>
@@ -479,9 +479,9 @@ export function FichaCliente({ perfil, fuso, hoje, agoraIso }: { perfil: PerfilC
         }}
       />
       <ConfirmarRemocaoCliente
-        cliente={removendo ? { id: perfil.id, nome: perfil.nome } : null}
+        cliente={removendo ? { id: perfil.id, nome: perfil.nome, totalReunioes: perfil.reunioes.length } : null}
         onFechar={() => setRemovendo(false)}
-        // Sem insights, o cliente sai da lista: a ficha volta para Clientes (a lista é lida de novo no servidor).
+        // Excluído, o cliente deixa de existir: a ficha volta para Clientes (a lista é lida de novo no servidor).
         onRemovido={() => router.push("/contas")}
       />
       <FormularioCompromisso

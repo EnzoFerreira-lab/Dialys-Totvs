@@ -82,9 +82,9 @@ export const api = {
   criarCompromisso: (corpo: NovoCompromisso) => chamar<Compromisso>("/api/v1/agenda", postJson(corpo)),
   alterarCompromisso: (id: string, corpo: AlteracaoCompromisso) =>
     chamar<Compromisso>(`/api/v1/agenda/${encodeURIComponent(id)}`, { ...postJson(corpo), method: "PATCH" }),
-  /** Tira o cliente da carteira do usuário e remove os insights dele (remoção lógica). */
-  removerDaCarteira: (contaId: string) =>
-    chamar<{ removido: true; cliente: { id: string; nome: string }; reunioesComInsightsRemovidos: number }>(`/api/v1/carteira/${encodeURIComponent(contaId)}`, { method: "DELETE" }),
+  /** Exclui o cliente: apaga de vez as reuniões dele e tudo o que derivou delas (sem desfazer). */
+  excluirCliente: (contaId: string) =>
+    chamar<{ excluido: true; cliente: { id: string; nome: string }; reunioesExcluidas: number }>(`/api/v1/carteira/${encodeURIComponent(contaId)}`, { method: "DELETE" }),
   /** Remoção lógica da transcrição de uma reunião (e da análise derivada só dela). */
   removerTranscricao: (reuniaoId: string) =>
     chamar<{ reuniaoId: string; codigo: string; conta: { id: string; nome: string }; transcricaoRemovidaEm: string | null; jaRemovida: boolean }>(

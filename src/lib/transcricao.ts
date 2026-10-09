@@ -2,6 +2,7 @@
 // reunião, com a transcrição anonimizada em ANON_TRANSCRICAO e metadados da conta. Usado no navegador
 // (colar/anexar) e no servidor (exemplos e validação).
 import { z } from "zod";
+import { nomeDescritivoCliente, normalizarCnae } from "./cnae";
 
 /** Metadados da reunião que a análise e a tela usam. Todos opcionais: texto colado não tem nenhum. */
 export const ContextoReuniaoSchema = z.object({
@@ -12,6 +13,8 @@ export const ContextoReuniaoSchema = z.object({
   duracao: z.string().max(20).optional(),
   segmento: z.string().max(80).optional(),
   uf: z.string().max(4).optional(),
+  /** CNAE da empresa (7 dígitos): dá nome ao cliente quando só há o código (src/lib/cnae.ts). */
+  cnae: z.string().regex(/^\d{7}$/).optional(),
   unidade: z.string().max(120).optional(),
   faixaFaturamento: z.string().max(120).optional(),
   nps: z.number().min(0).max(10).optional(),
@@ -72,6 +75,7 @@ function contextoDoRegistro(registro: Record<string, unknown>): ContextoReuniao 
     duracao: texto(registro.DURACAO_MEETING)?.slice(0, 20),
     segmento: texto(registro.NOME_SEGMENTO) ? formatarSegmento(String(registro.NOME_SEGMENTO)).slice(0, 80) : undefined,
     uf: texto(registro.UF)?.slice(0, 4),
+    cnae: normalizarCnae(registro.CNAE),
     unidade: texto(registro.NOME_UNIDADE)?.slice(0, 120),
     faixaFaturamento: texto(registro.FAIXA_FATURAMENTO_CLIENTE_EC)?.slice(0, 120),
     nps: Number.isFinite(nps) && nps >= 0 && nps <= 10 ? nps : undefined,
@@ -105,6 +109,11 @@ export function descreverContexto(contexto: ContextoReuniao) {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** "Reunião #1082750 · Varejo · RS · 20/02/2026 · 49 min": o título já traz o cliente. */
+export function descricaoDaReuniao(id: string, contexto: ContextoReuniao) {
+  return [`Reunião #${id}`, descreverContexto(contexto)].filter(Boolean).join(" · ");
 }
 
 function registrosDe(dados: unknown): Record<string, unknown>[] {
@@ -142,10 +151,12 @@ export function extrairReunioes(conteudo: string): ReuniaoImportada[] | null {
 
     const contexto = contextoDoRegistro(registro);
     const id = contexto.idReuniao ?? String(indice + 1);
+    // Mesmo nome que as telas mostram sem o nome real: atividade · UF (código), ou "Cliente <código>".
+    const cliente = nomeDescritivoCliente(contexto) ?? (contexto.codigoCliente ? `Cliente ${contexto.codigoCliente}` : undefined);
     reunioes.push({
       id,
-      titulo: `Reunião #${id}${contexto.segmento ? ` · ${contexto.segmento}` : ""}`,
-      descricao: descreverContexto(contexto) || "Sem metadados",
+      titulo: cliente ?? `Reunião #${id}${contexto.segmento ? ` · ${contexto.segmento}` : ""}`,
+      descricao: cliente ? descricaoDaReuniao(id, contexto) : descreverContexto(contexto) || "Sem metadados",
       transcricao,
       contexto,
     });

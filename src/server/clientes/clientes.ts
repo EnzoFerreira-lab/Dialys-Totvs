@@ -2,15 +2,14 @@
 // Dois conceitos:
 //   cadastro  clientes que o usuário pode ver: as contas com reunião analisada pelo Dialys, mais a base
 //             da empresa quando ela for ligada aqui (cadastroReal).
-//   carteira  o cadastro menos os clientes que o próprio usuário removeu ("Remover cliente"). Remover
-//             também tira os insights do cliente (remoção lógica nas reuniões dele, ver repositorio.ts);
-//             nada é apagado do banco e `devolverACarteira` desfaz.
+//   carteira  o cadastro (o mesmo conjunto: "Excluir cliente" apaga as reuniões do cliente, então ele
+//             sai do cadastro; ver excluirCliente).
 // A situação vem da saúde calculada nas reuniões analisadas; sem reunião analisada, situacao = null
 // ("Sem avaliação"), que é diferente de "Saudável".
 import { normalizarBusca } from "@/lib/formatar";
 import type { FaixaSaude } from "@/lib/saude";
 import { podeAcessarConta, type Usuario } from "../auth/usuarios";
-import { desfazerRemocaoCarteira, listarRemocoesCarteira, nomeDoClienteNasReunioes, registrarRemocaoCarteira } from "../db/repositorio";
+import { excluirReunioesDoCliente, nomeDoClienteNasReunioes } from "../db/repositorio";
 import { listarContasInsight } from "../insights/contas";
 
 export type ClienteResumo = {
@@ -52,10 +51,7 @@ async function cadastroDoUsuario(usuario: Usuario): Promise<ClienteResumo[]> {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
-async function carteiraDoUsuario(usuario: Usuario): Promise<ClienteResumo[]> {
-  const [cadastro, removidos] = await Promise.all([cadastroDoUsuario(usuario), listarRemocoesCarteira(usuario.id)]);
-  return cadastro.filter((c) => !removidos.has(c.id));
-}
+const carteiraDoUsuario = cadastroDoUsuario;
 
 export const LIMITE_CLIENTES = 10;
 
@@ -82,22 +78,16 @@ export async function buscarClienteNoCadastro(usuario: Usuario, id: string): Pro
 }
 
 /**
- * "Remover cliente": tira o cliente da carteira do usuário autenticado e remove os insights dele
- * (Central, Dashboard, indicadores e assistente). null: cliente fora da carteira (inexistente, sem
- * acesso ou já removido).
+ * "Excluir cliente": apaga de vez as reuniões do cliente e tudo o que derivou delas (Central, Dashboard,
+ * Clientes, indicadores e assistente), para todos. Sem desfazer: uma reunião nova desse cliente começa um
+ * histórico novo, só com ela. Os compromissos da agenda ficam. Vale também para o cliente que só tem
+ * reuniões sem transcrição ativa. null: inexistente ou fora do escopo (mesma resposta).
+ * Lança ErroRemocao se alguma reunião do cliente ainda está em análise.
  */
-export async function removerDaCarteira(usuario: Usuario, contaId: string) {
-  const cliente = await buscarCliente(usuario, contaId);
-  if (!cliente) return null;
-  const { reunioes } = await registrarRemocaoCarteira(usuario.id, contaId);
-  return { cliente, reunioesComInsightsRemovidos: reunioes };
-}
-
-/** Devolve à carteira um cliente removido e reativa os insights dele. null: cliente desconhecido ou sem acesso. */
-export async function devolverACarteira(usuario: Usuario, contaId: string) {
+export async function excluirCliente(usuario: Usuario, contaId: string) {
   if (!podeAcessarConta(usuario, contaId)) return null;
   const nome = (await buscarClienteNoCadastro(usuario, contaId))?.nome ?? (await nomeDoClienteNasReunioes(contaId));
   if (!nome) return null;
-  const { reunioes } = await desfazerRemocaoCarteira(usuario.id, contaId);
-  return { cliente: { id: contaId, nome }, reunioesComInsightsReativados: reunioes };
+  const { reunioes } = await excluirReunioesDoCliente(contaId);
+  return { cliente: { id: contaId, nome }, reunioesExcluidas: reunioes };
 }

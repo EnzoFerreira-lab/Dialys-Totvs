@@ -1,4 +1,4 @@
-// "Remover cliente": sai da carteira e os insights dele somem (remoção lógica); compromissos ficam.
+// "Excluir cliente": apaga de vez as reuniões do cliente e o que derivou delas; compromissos ficam.
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,20 +8,29 @@ import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
 import { executarFerramenta } from "../assistente/ferramentas";
 import { COOKIE_SESSAO, criarTokenSessao } from "../auth/sessao";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
-import { lerBanco } from "../db/banco";
-import { listarInsights } from "../db/repositorio";
+import { lerBanco, transacao } from "../db/banco";
+import { listarInsights, removerTranscricao } from "../db/repositorio";
 import { listarReunioesCentral } from "../insights/contas";
 import { montarResumo } from "../insights/resumo";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
-import { receberEProcessar } from "../pipeline/processar-reuniao";
+import { receberEProcessar, receberReuniao } from "../pipeline/processar-reuniao";
 import { listarClientes } from "./clientes";
+import { listarClientesUnificados, montarPerfilCliente } from "./perfil";
 
 vi.mock("next/server", async (original) => ({
   ...(await original<typeof import("next/server")>()),
   connection: async () => {},
 }));
 
-const { DELETE: remover, PUT: devolver } = await import("@/app/api/v1/carteira/[contaId]/route");
+// Envio sem chave do Claude: o motor de teste, sem a espera das regras locais.
+vi.mock("../pipeline/motor-analise", async (original) => {
+  const modulo = await original<typeof import("../pipeline/motor-analise")>();
+  const { motorFalso: falso } = await import("../pipeline/__fixtures__/motor-falso");
+  return { ...modulo, escolherMotor: () => falso() };
+});
+
+const { DELETE: remover } = await import("@/app/api/v1/carteira/[contaId]/route");
+const { POST: processar } = await import("@/app/api/v1/reunioes/processar/route");
 const { POST: criarCompromisso } = await import("@/app/api/v1/agenda/route");
 const { PATCH: alterarCompromisso } = await import("@/app/api/v1/agenda/[id]/route");
 
@@ -37,7 +46,8 @@ const cabecalhos = (usuario?: Usuario): Record<string, string> => ({
 const params = (contaId: string) => ({ params: Promise.resolve({ contaId }) });
 const removerDe = (usuario: Usuario | undefined, contaId: string) =>
   remover(new Request(`${BASE}/carteira/${contaId}`, { method: "DELETE", headers: cabecalhos(usuario) }), params(contaId));
-const devolverA = (usuario: Usuario, contaId: string) => devolver(new Request(`${BASE}/carteira/${contaId}`, { method: "PUT", headers: cabecalhos(usuario) }), params(contaId));
+const enviar = (usuario: Usuario | undefined, corpo: unknown) =>
+  processar(new Request(`${BASE}/reunioes/processar?modo=sincrono`, { method: "POST", headers: cabecalhos(usuario), body: JSON.stringify(corpo) }));
 const ids = async (usuario: Usuario) => (await listarClientes(usuario, { limite: 100 })).clientes.map((c) => c.id);
 
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
@@ -60,55 +70,88 @@ afterEach(async () => {
   await rm(pasta, { recursive: true, force: true });
 });
 
-describe("remover cliente", () => {
-  it("tira da carteira e remove os insights dele da Central, do Dashboard e do assistente, sem apagar nada", async () => {
+const daConta = async (contaId: string) => (await lerBanco()).reuniao.filter((r) => r.contaId === contaId);
+
+describe("excluir cliente", () => {
+  it("apaga as reuniões do cliente e tudo o que derivou delas, para todos; repetir dá 404", async () => {
+    const reunioes = (await daConta("conta-horizonte")).map((r) => r.id);
     expect((await removerDe(undefined, "conta-horizonte")).status).toBe(401);
     const resposta = await removerDe(RICARDO, "conta-horizonte");
     expect(resposta.status).toBe(200);
-    expect(await resposta.json()).toMatchObject({ removido: true, cliente: { id: "conta-horizonte", nome: "Grupo Horizonte" }, reunioesComInsightsRemovidos: 2 });
+    expect(await resposta.json()).toEqual({ excluido: true, cliente: { id: "conta-horizonte", nome: "Grupo Horizonte" }, reunioesExcluidas: 2 });
 
     expect(await ids(RICARDO)).toEqual(["conta-beta"]);
-    // Insights: fora das consultas ativas (Dashboard, Central, indicadores e assistente).
     expect((await listarInsights()).every((i) => i.reuniao.contaId === "conta-beta")).toBe(true);
     expect((await listarReunioesCentral()).map((r) => r.conta.id)).toEqual(["conta-beta"]);
     expect((await montarResumo()).kpis).toMatchObject({ reunioesAnalisadas: 1, contasAnalisadas: 1 });
     const consulta = await executarFerramenta({ usuario: RICARDO, agora: new Date() }, "consultar_empresa", { nome: "Horizonte" });
     expect(consulta.dados.empresas).toEqual([]);
+    expect(await montarPerfilCliente(RICARDO, "conta-horizonte")).toBeNull();
 
-    // Remoção lógica: reuniões, transcrições e análises continuam no banco, marcadas.
+    // Apagado de verdade: nada do cliente fica no banco.
     const banco = await lerBanco();
-    const doCliente = banco.reuniao.filter((r) => r.contaId === "conta-horizonte");
-    expect(doCliente).toHaveLength(2);
-    expect(doCliente.every((r) => r.transcricao === TRANSCRICAO_TESTE && r.transcricaoRemovida?.motivo === "cliente_removido")).toBe(true);
-    expect(banco.sinal.filter((s) => doCliente.some((r) => r.id === s.reuniaoId)).length).toBeGreaterThan(0);
-    expect(banco.carteira_remocao).toEqual([{ usuarioId: RICARDO.id, contaId: "conta-horizonte", removidoEm: expect.any(String) }]);
+    expect(banco.reuniao.some((r) => reunioes.includes(r.id))).toBe(false);
+    expect([...banco.analise, ...banco.sinal, ...banco.mencao_produto].some((x) => reunioes.includes(x.reuniaoId))).toBe(false);
+    expect(banco.carteira_remocao).toEqual([]);
 
-    // Já removido, fora do escopo ou inexistente: mesma resposta.
+    // Já excluído ou inexistente: mesma resposta.
     expect((await removerDe(RICARDO, "conta-horizonte")).status).toBe(404);
-    expect((await removerDe(RESTRITO, "conta-horizonte")).status).toBe(404);
     expect((await removerDe(RICARDO, "nao-existe")).status).toBe(404);
   });
 
-  it("devolver traz o cliente e os insights de volta", async () => {
-    await removerDe(RICARDO, "conta-horizonte");
-    const resposta = await devolverA(RICARDO, "conta-horizonte");
-    expect(resposta.status).toBe(200);
-    expect(await resposta.json()).toMatchObject({ naCarteira: true, cliente: { nome: "Grupo Horizonte" }, reunioesComInsightsReativados: 2 });
-    expect(await ids(RICARDO)).toEqual(["conta-beta", "conta-horizonte"]);
-    expect((await listarReunioesCentral()).filter((r) => r.conta.id === "conta-horizonte" && r.detalhe)).toHaveLength(2);
-    expect((await devolverA(RESTRITO, "conta-horizonte")).status).toBe(404);
+  it("fora do escopo do usuário: 404 e nada é apagado", async () => {
+    expect((await removerDe(RESTRITO, "conta-horizonte")).status).toBe(404);
+    expect(await daConta("conta-horizonte")).toHaveLength(2);
   });
 
-  it("transcrição removida antes continua removida ao devolver o cliente", async () => {
-    const { DELETE: removerTranscricao } = await import("@/app/api/v1/reunioes/[id]/transcricao/route");
-    const antiga = (await lerBanco()).reuniao.find((r) => r.contexto?.data === "2026-09-01 10:00:00")!.id;
-    await removerTranscricao(new Request(`${BASE}/reunioes/${antiga}/transcricao`, { method: "DELETE", headers: cabecalhos(RICARDO) }), {
-      params: Promise.resolve({ id: antiga }),
+  it("cliente só com reuniões sem transcrição ativa também pode ser excluído", async () => {
+    const [beta] = await daConta("conta-beta");
+    await removerTranscricao(beta.id, RICARDO.id);
+    expect((await listarReunioesCentral()).some((r) => r.conta.id === "conta-beta" && r.transcricaoRemovidaEm)).toBe(true);
+
+    const resposta = await removerDe(RICARDO, "conta-beta");
+    expect(await resposta.json()).toMatchObject({ cliente: { id: "conta-beta", nome: "Beta Indústria" }, reunioesExcluidas: 1 });
+    expect((await listarReunioesCentral()).some((r) => r.conta.id === "conta-beta")).toBe(false);
+    expect((await listarClientesUnificados(RICARDO)).map((c) => c.id)).not.toContain("conta-beta");
+  });
+
+  it("reunião nova de um cliente excluído começa um histórico novo, só com ela", async () => {
+    await removerDe(RICARDO, "conta-horizonte");
+    expect((await enviar(RICARDO, { texto: TRANSCRICAO_TESTE, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" })).status).toBe(201);
+    expect((await listarClientesUnificados(RICARDO)).find((c) => c.id === "conta-horizonte")?.totalReunioes).toBe(1);
+    expect((await listarReunioesCentral()).filter((r) => r.conta.id === "conta-horizonte")).toHaveLength(1);
+  });
+
+  it("recusa (409) enquanto uma reunião do cliente está em análise, sem apagar nada", async () => {
+    await receberReuniao({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" });
+    const resposta = await removerDe(RICARDO, "conta-horizonte");
+    expect(resposta.status).toBe(409);
+    expect((await resposta.json()).erro.codigo).toBe("REUNIAO_EM_PROCESSAMENTO");
+    expect(await daConta("conta-horizonte")).toHaveLength(3);
+  });
+
+  it("remoção da versão antiga (lógica) é convertida: sai o que existia na remoção, fica o que veio depois", async () => {
+    const [primeira, segunda] = await daConta("conta-horizonte");
+    const [beta] = await daConta("conta-beta");
+    // Estado gravado pela versão antiga: marcas "cliente_removido" e registros em carteira_remocao.
+    await transacao((banco) => {
+      for (const r of banco.reuniao) {
+        if (r.id === primeira.id || r.id === segunda.id) r.transcricaoRemovida = { em: r.criadaEm, usuarioId: RICARDO.id, motivo: "cliente_removido" };
+        if (r.id === beta.id) r.criadaEm = "2026-01-01T00:00:00.000Z";
+      }
+      banco.carteira_remocao.push(
+        { usuarioId: RICARDO.id, contaId: "conta-horizonte", removidoEm: "2026-01-02T00:00:00.000Z" },
+        { usuarioId: RICARDO.id, contaId: "conta-beta", removidoEm: "2026-01-02T00:00:00.000Z" },
+      );
     });
-    expect((await (await removerDe(RICARDO, "conta-horizonte")).json()).reunioesComInsightsRemovidos).toBe(1);
-    await devolverA(RICARDO, "conta-horizonte");
-    const linhas = (await listarReunioesCentral()).filter((r) => r.conta.id === "conta-horizonte");
-    expect(linhas.map((r) => [r.id === antiga, r.detalhe === null])).toEqual(expect.arrayContaining([[true, true], [false, false]]));
+    // Reunião enviada depois da remoção (o cliente voltou com ela).
+    await reuniao("conta-beta", "Beta Indústria", "2026-10-02 09:00:00");
+
+    const banco = await lerBanco();
+    expect(banco.carteira_remocao).toEqual([]);
+    expect(banco.reuniao.filter((r) => r.contaId === "conta-horizonte")).toEqual([]);
+    expect(banco.reuniao.filter((r) => r.contaId === "conta-beta").map((r) => r.contexto?.data)).toEqual(["2026-10-02 09:00:00"]);
+    expect(banco.analise.some((a) => [primeira.id, segunda.id, beta.id].includes(a.reuniaoId))).toBe(false);
   });
 
   it("compromissos com o cliente continuam com o nome dele e podem ser editados; novos com ele são recusados", async () => {

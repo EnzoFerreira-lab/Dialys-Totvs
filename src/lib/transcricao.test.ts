@@ -25,6 +25,16 @@ describe("extrairReunioes", () => {
     expect(reuniao.descricao).toBe("Saúde · RS · 16/01/2026 · 42 min · NPS 7");
   });
 
+  it("com código do cliente e CNAE, o título é o nome do cliente (atividade · UF (código))", () => {
+    const [reuniao] = extrairReunioes(JSON.stringify([{ ...REGISTRO, CODT: "T54451", CNAE: "8610101" }]))!;
+    expect(reuniao.titulo).toBe("Hospital · RS (T54451)");
+    expect(reuniao.contexto).toMatchObject({ codigoCliente: "T54451", cnae: "8610101" });
+    // CNAE fora da lista: a atividade vem do segmento. CNAE inválido é descartado.
+    const [outra] = extrairReunioes(JSON.stringify([{ ...REGISTRO, CODT: "T1", CNAE: "0000000" }]))!;
+    expect(outra.titulo).toBe("Saúde · RS (T1)");
+    expect(extrairReunioes(JSON.stringify([{ ...REGISTRO, CNAE: "86.10-1" }]))![0].contexto.cnae).toBeUndefined();
+  });
+
   it("aceita um registro solto, BOM e envelope { reunioes: [...] }", () => {
     expect(extrairReunioes(`\uFEFF${JSON.stringify(REGISTRO)}`)).toHaveLength(1);
     expect(extrairReunioes(JSON.stringify({ reunioes: [REGISTRO, { ...REGISTRO, ID_MEETING: "2", ANON_TRANSCRICAO: "Outra" }] }))).toHaveLength(2);

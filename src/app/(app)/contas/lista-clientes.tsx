@@ -258,7 +258,7 @@ export function ListaClientes({ clientes: recebidos, fuso }: { clientes: Cliente
                             setRemovendo(cliente);
                           }}
                         >
-                          Remover cliente
+                          Excluir cliente
                         </ItemMenu>
                       )}
                     </MenuSuspenso>

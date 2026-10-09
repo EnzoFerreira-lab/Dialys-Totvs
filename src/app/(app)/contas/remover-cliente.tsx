@@ -6,73 +6,80 @@ import { useToast } from "@/components/ui/provedor-toast";
 import { api, ErroDaApi } from "@/lib/api-cliente";
 import { EVENTO_CARTEIRA_ALTERADA } from "@/lib/eventos";
 
-type ClienteParaRemover = { id: string; nome: string };
+type ClienteParaExcluir = { id: string; nome: string; totalReunioes?: number };
+
+const reunioesTexto = (n: number) => `${n} ${n === 1 ? "reunião" : "reuniões"}`;
 
 /**
- * "Remover cliente" da aba Clientes (lista e ficha): confirmação, envio único (DELETE /api/v1/carteira/{id})
- * e aviso de sucesso ou erro. Remove o cliente da carteira e os insights dele; os compromissos ficam.
+ * "Excluir cliente" da aba Clientes (lista e ficha): confirmação, envio único (DELETE /api/v1/carteira/{id})
+ * e aviso de sucesso ou erro. Apaga de vez as reuniões do cliente e o que derivou delas; os compromissos ficam.
  */
 export function ConfirmarRemocaoCliente({
   cliente,
   onFechar,
   onRemovido,
 }: {
-  cliente: ClienteParaRemover | null;
+  cliente: ClienteParaExcluir | null;
   onFechar: () => void;
-  onRemovido: (cliente: ClienteParaRemover) => void;
+  onRemovido: (cliente: ClienteParaExcluir) => void;
 }) {
   const toast = useToast();
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [abertoPara, setAbertoPara] = useState<string | null>(null);
-  /** Trava síncrona: dois cliques seguidos em "Remover" mandam um pedido só. */
-  const removendoAgora = useRef(false);
+  /** Trava síncrona: dois cliques seguidos em "Excluir" mandam um pedido só. */
+  const excluindoAgora = useRef(false);
 
   if ((cliente?.id ?? null) !== abertoPara) {
     setAbertoPara(cliente?.id ?? null);
     setErro(null);
   }
 
-  async function remover() {
-    if (!cliente || removendoAgora.current) return;
-    removendoAgora.current = true;
+  async function excluir() {
+    if (!cliente || excluindoAgora.current) return;
+    excluindoAgora.current = true;
     setOcupado(true);
     setErro(null);
     try {
-      const resposta = await api.removerDaCarteira(cliente.id);
+      const resposta = await api.excluirCliente(cliente.id);
       // A agenda da Home atualiza a lista de clientes do formulário de compromisso.
       window.dispatchEvent(new Event(EVENTO_CARTEIRA_ALTERADA));
-      const n = resposta.reunioesComInsightsRemovidos;
+      const n = resposta.reunioesExcluidas;
       toast({
-        titulo: "Cliente removido",
-        descricao: `${cliente.nome} saiu da sua carteira${n ? ` e os insights de ${n} ${n === 1 ? "reunião" : "reuniões"} foram removidos` : ""}. Os compromissos já marcados continuam na agenda.`,
+        titulo: "Cliente excluído",
+        descricao: `${cliente.nome} foi excluído${n ? ` com ${reunioesTexto(n)}` : ""}. Os compromissos já marcados continuam na agenda.`,
       });
       onRemovido(cliente);
     } catch (falha) {
-      // O erro fica no modal: nada foi removido.
-      setErro(falha instanceof ErroDaApi ? falha.message : "Não foi possível remover o cliente. Tente novamente.");
+      // O erro fica no modal: nada foi excluído.
+      setErro(falha instanceof ErroDaApi ? falha.message : "Não foi possível excluir o cliente. Tente novamente.");
     } finally {
-      removendoAgora.current = false;
+      excluindoAgora.current = false;
       setOcupado(false);
     }
   }
 
+  const total = cliente?.totalReunioes;
   return (
     <ModalConfirmacao
       aberto={Boolean(cliente)}
       rotulo="Clientes"
-      titulo={`Remover ${cliente?.nome ?? "cliente"}?`}
-      rotuloConfirmar="Remover"
-      rotuloOcupado="Removendo..."
+      titulo={`Excluir ${cliente?.nome ?? "cliente"}?`}
+      rotuloConfirmar="Excluir"
+      rotuloOcupado="Excluindo..."
       perigo
       ocupado={ocupado}
-      onConfirmar={() => void remover()}
+      onConfirmar={() => void excluir()}
       onCancelar={onFechar}
     >
       <p>
-        <strong className="font-semibold">{cliente?.nome}</strong> sai da sua carteira e os insights dele (sinais, evidências, diagnósticos e
-        ações sugeridas) deixam de aparecer na Central de Insights, no Dashboard, nos indicadores e nas respostas do Dialys. Os compromissos já
-        marcados continuam na agenda.
+        <strong className="font-semibold">{cliente?.nome}</strong> e{" "}
+        {total === 1 ? "a reunião" : total ? `as ${reunioesTexto(total)}` : "todas as reuniões"} dele
+        (transcrições, sinais, evidências, diagnósticos e ações sugeridas) serão apagados da Central de Insights, do Dashboard, de Clientes e
+        das respostas do Dialys. <strong className="font-semibold">Não é possível desfazer.</strong>
+      </p>
+      <p className="mt-2">
+        Se você enviar outra reunião desse cliente, ele volta só com ela. Os compromissos já marcados continuam na agenda.
       </p>
       {erro ? (
         <p role="alert" className="mt-3 text-[13px] text-support-error">

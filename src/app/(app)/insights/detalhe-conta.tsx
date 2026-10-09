@@ -2,7 +2,6 @@
 
 import { AiGenerate, Chat, ChevronDown, ChevronUp, CheckmarkOutline, Copy, DocumentBlank, Download, Renew, TrashCan, UserProfile, WarningFilled } from "@carbon/icons-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { SignalTag, type SignalVariant } from "@/components/sinais/signal-tag";
@@ -65,7 +64,6 @@ function textoData(reuniao: Pick<ReuniaoCentral, "data" | "processadaEm">) {
 
 export function DetalheConta({ conta, reuniao, sincronizando, erroCrm, onSincronizar, onRemoverTranscricao }: DetalheContaProps) {
   const avisar = useToast();
-  const router = useRouter();
   const [produtosAbertos, setProdutosAbertos] = useState(true);
   const ids = { produtos: useId(), evidencia: useId(), diagnostico: useId(), corpoProdutos: useId() };
   const dataReuniao = textoData(reuniao);
@@ -109,43 +107,11 @@ export function DetalheConta({ conta, reuniao, sincronizando, erroCrm, onSincron
             <span>
               Data da reunião: <span className={reuniao.data ? "text-text-primary" : "text-text-helper italic"}>{dataReuniao}</span>
             </span>
-            {conta.reunioes.length > 1 ? (
-              <>
-                <span className="h-3 w-px bg-[#C6C6C6] print:hidden" aria-hidden="true" />
-                <label className="flex items-center gap-1.5 print:hidden">
-                  Outras reuniões do cliente:
-                  <select
-                    value={conta.reuniaoId}
-                    onChange={(evento) => router.push(`/insights?reuniao=${encodeURIComponent(evento.target.value)}`, { scroll: false })}
-                    className="h-7 border-0 border-b border-border-strong bg-field-01 px-1.5 text-[13px] text-text-primary focus:outline-2 focus:outline-focus"
-                  >
-                    {conta.reunioes.map((r, i) => (
-                      <option key={r.id} value={r.id}>
-                        {r.codigo} · {r.dataInformada ? `${formatarData(r.data)} ${r.hora}` : "sem data"}
-                        {i === 0 ? " (mais recente)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            ) : null}
             <span className="h-3 w-px bg-[#C6C6C6]" aria-hidden="true" />
             <span title={`Como a nota foi calculada:\n${conta.saude.fatores.join("\n")}`}>
               Saúde: <strong className="font-semibold text-text-primary">{conta.saude.nota.toLocaleString("pt-BR")}/10</strong> (
               {ROTULO_FAIXA[conta.saude.faixa]})
             </span>
-            {conta.segmento ? (
-              <>
-                <span className="h-3 w-px bg-[#C6C6C6]" aria-hidden="true" />
-                <span>{conta.segmento}</span>
-              </>
-            ) : null}
-            {conta.totalReunioes > 1 ? (
-              <>
-                <span className="h-3 w-px bg-[#C6C6C6]" aria-hidden="true" />
-                <span>{conta.totalReunioes} reuniões analisadas</span>
-              </>
-            ) : null}
           </p>
           {!conta.reuniaoMaisRecente ? (
             <p className="mt-2 inline-flex items-center gap-2 bg-[#FFF8E6] px-2.5 py-1 text-[12px] text-text-primary print:hidden">

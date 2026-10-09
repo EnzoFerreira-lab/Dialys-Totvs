@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { TRANSCRICAO_TESTE } from "../__fixtures__/reuniao-teste";
 import { validarEvidencias } from "../validar-evidencia";
 import { analisarReuniaoDemo } from "./analisar-reuniao-demo";
+import { atividadeCnae } from "@/lib/cnae";
 import { lerAmostraTotvs } from "./amostra-totvs";
+import { listarExemplos } from "./exemplos";
 import { analisarPorRegras, papeisDosLocutores } from "./heuristica";
 
 describe("analisarPorRegras", () => {
@@ -47,6 +49,27 @@ describe("analisarReuniaoDemo (regras locais)", () => {
 });
 
 // Amostra real enviada pela TOTVS (reuniões anonimizadas, locutores sem papel, erros de transcrição).
+/** IDs da amostra original (amostra_reunioes.json). */
+const AMOSTRA_ORIGINAL = new Set([
+  "1082750",
+  "920847",
+  "959985",
+  "1070370",
+  "934377",
+  "1227164",
+  "1144435",
+  "1296669",
+  "1070373",
+  "1218774",
+  "1332586",
+  "967677",
+  "1394492",
+  "756129",
+  "1069924",
+  "747580",
+  "1282016",
+]);
+
 describe("amostra TOTVS (data/exemplos/totvs)", () => {
   const reunioes = lerAmostraTotvs();
   const porId = (id: string) => {
@@ -56,9 +79,44 @@ describe("amostra TOTVS (data/exemplos/totvs)", () => {
   };
 
   it("carrega as reuniões sem duplicatas e com metadados", () => {
-    expect(reunioes.length).toBe(16);
+    // 16 da amostra original + 54 de clientes com reuniões recorrentes (amostra_clientes_recorrentes.json).
+    expect(reunioes.length).toBe(70);
     expect(new Set(reunioes.map((r) => r.transcricao)).size).toBe(reunioes.length);
     expect(reunioes.find((r) => r.id === "920847")?.contexto).toMatchObject({ segmento: "Saúde", uf: "RS", nps: 7 });
+  });
+
+  it("clientes recorrentes: várias reuniões por empresa, cada uma com sinais e CNAE com nome", () => {
+    const porCliente = new Map<string, typeof reunioes>();
+    for (const r of reunioes)
+      porCliente.set(r.contexto.codigoCliente ?? "", [...(porCliente.get(r.contexto.codigoCliente ?? "") ?? []), r]);
+    const recorrentes = [...porCliente.entries()].filter(([codigo, lista]) => codigo && lista.length >= 2);
+    expect(recorrentes.length).toBeGreaterThanOrEqual(20);
+    for (const [, lista] of recorrentes) expect(lista.every((r) => atividadeCnae(r.contexto.cnae))).toBe(true);
+    // Toda reunião acrescentada gera ao menos um sinal (a amostra original tem reuniões sem sinal, como o kick-off).
+    const novas = reunioes.filter((r) => r.contexto.data && r.contexto.codigoCliente && !AMOSTRA_ORIGINAL.has(r.id));
+    expect(novas).toHaveLength(54);
+    for (const r of novas) expect(analisarPorRegras(r.transcricao, r.contexto).sinais.length).toBeGreaterThan(0);
+  });
+
+  it("menu Exemplo: agrupado por empresa em ordem alfabética, reunião mais recente primeiro", () => {
+    const exemplos = listarExemplos();
+    expect(exemplos).toHaveLength(70);
+    const grupos = [...new Set(exemplos.map((e) => e.grupo))];
+    const empresas = grupos.map((g) => g.replace(/ · \d+ reuni(ão|ões)$/, ""));
+    // Com nome, em ordem alfabética; sem nome ("Cliente <código>"), no fim.
+    const semNome = (e: string) => e.startsWith("Cliente ") || e === "Sem cliente identificado";
+    const comNome = empresas.filter((e) => !semNome(e));
+    expect(comNome).toEqual([...comNome].sort((a, b) => a.localeCompare(b, "pt-BR")));
+    expect(empresas.slice(comNome.length).every(semNome)).toBe(true);
+    expect(empresas.at(-1)).toBe("Cliente 118588");
+    // Cada empresa aparece num bloco só, e o rótulo traz o total de reuniões dela.
+    for (const g of grupos) {
+      const doGrupo = exemplos.filter((e) => e.grupo === g);
+      expect(g).toContain(`· ${doGrupo.length} ${doGrupo.length === 1 ? "reunião" : "reuniões"}`);
+      const datas = doGrupo.map((e) => reunioes.find((r) => `totvs-${r.id}` === e.id)?.contexto.data ?? "");
+      expect(datas).toEqual([...datas].sort().reverse());
+    }
+    expect(grupos).toContain("Estaleiro · RS (TFEHER) · 4 reuniões");
   });
 
   it.each(reunioes.map((r) => [r.id, r] as const))("%s: no máximo 6 sinais, todos com citação literal", (_id, reuniao) => {

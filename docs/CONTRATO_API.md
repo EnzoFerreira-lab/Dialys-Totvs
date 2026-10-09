@@ -92,9 +92,9 @@ Recebe uma reunião e aciona o pipeline.
 }
 ```
 
-Também aceita o registro exportado pela TOTVS (`{ "ANON_TRANSCRICAO": "...", "ID_MEETING": ..., ... }`) ou uma lista deles com `"idReuniao"` indicando qual analisar. Os metadados viram o `contexto`; o `CODT` vira `contexto.codigoCliente`.
+Também aceita o registro exportado pela TOTVS (`{ "ANON_TRANSCRICAO": "...", "ID_MEETING": ..., ... }`) ou uma lista deles com `"idReuniao"` indicando qual analisar. Os metadados viram o `contexto`; o `CODT` vira `contexto.codigoCliente` e o `CNAE` vira `contexto.cnae`.
 
-**Empresa da reunião.** `contaId` + `contaNome` identificam a empresa. Sem eles, o `CODT` da TOTVS agrupa as reuniões do mesmo cliente ("Cliente TB5392"); sem nenhum dos dois, a reunião aparece sozinha na Central de Insights.
+**Empresa da reunião.** `contaId` + `contaNome` identificam a empresa. Sem eles, o `CODT` da TOTVS agrupa as reuniões do mesmo cliente; sem nenhum dos dois, a reunião aparece sozinha na Central de Insights. O nome devolvido em `conta.nome` segue esta ordem: `contaNome` do envio → nome real configurado em `.dialys/totvs/nomes-clientes.json` → atividade pelo CNAE + UF + código ("Distribuidora de medicamentos · RS (TB5392)") → "Cliente TB5392". O nome é calculado a cada consulta e não é gravado.
 
 **Corpo, opção B: `multipart/form-data`**
 
@@ -487,15 +487,15 @@ Mesma sessão do assistente (`401 SESSAO_AUSENTE` sem ela). O usuário vem só d
 
 Clientes são as contas com reunião analisada (mais a base da empresa, quando ligada); a agenda fica na tabela `compromisso` do banco.
 
-### `DELETE /api/v1/carteira/{contaId}` e `PUT /api/v1/carteira/{contaId}`
+### `DELETE /api/v1/carteira/{contaId}`
 
-"Remover cliente" da Home: `DELETE` tira o cliente da carteira do usuário da sessão **e remove os insights dele** (remoção lógica das reuniões do cliente, com `motivo: "cliente_removido"`): saem da Central, de `GET /insights`, de `GET /resumo`, do briefing e do assistente. Nada é apagado; os compromissos continuam. `PUT` devolve o cliente e reativa esses insights. Fica na tabela `carteira_remocao`.
+"Excluir cliente" da aba Clientes: **apaga de vez** todas as reuniões do cliente e o que derivou delas (análises, sinais, menções de produto, sincronizações do CRM), para todos os usuários. Não há como desfazer: uma reunião nova desse cliente começa um histórico novo, só com ela. Os compromissos continuam na agenda; citações do assistente a reuniões apagadas deixam de abrir. Vale também para o cliente que só tem reuniões sem transcrição ativa. A versão anterior (remoção lógica com `PUT` para desfazer, tabela `carteira_remocao` e marca `motivo: "cliente_removido"`) saiu; o que ela gravou é convertido na leitura do banco: saem as reuniões que existiam na remoção e ficam as enviadas depois.
 
 ```json
-{ "removido": true, "cliente": { "id": "c-001", "nome": "Metalúrgica Vale Forte" }, "reunioesComInsightsRemovidos": 2 }
+{ "excluido": true, "cliente": { "id": "c-001", "nome": "Metalúrgica Vale Forte" }, "reunioesExcluidas": 2 }
 ```
 
-Erros: `401 SESSAO_AUSENTE`, `404 CLIENTE_NAO_ENCONTRADO` (fora da carteira: inexistente, sem acesso ou já removido; mesma resposta). Depois de removido, o cliente sai de `GET /api/v1/clientes` e não pode ser usado em compromissos **novos** (`422 CLIENTE_INVALIDO`); compromissos existentes continuam com ele e podem ser editados.
+Erros: `401 SESSAO_AUSENTE`, `404 CLIENTE_NAO_ENCONTRADO` (inexistente, sem acesso ou já excluído; mesma resposta), `409 REUNIAO_EM_PROCESSAMENTO` (uma reunião do cliente ainda está em análise; nada é apagado). Depois de excluído, o cliente sai de `GET /api/v1/clientes` e não pode ser usado em compromissos **novos** (`422 CLIENTE_INVALIDO`); compromissos existentes continuam com ele e podem ser editados.
 
 ### `GET /api/v1/clientes`
 

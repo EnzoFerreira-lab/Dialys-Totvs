@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto";
 import { chaveConta, nomeConta } from "@/lib/insights";
 import type { ResultadoAnalise } from "../ai/analisar-reuniao";
 import type { Severidade, TipoSinal } from "../ai/schemas";
+import { identificarClientes } from "../clientes/identificacao";
 import {
-  lerBanco,
+  apagarReunioes,
+  lerBanco as lerBancoGravado,
   proximoNumeroReuniao,
   transacao,
   type AnaliseRegistro,
@@ -21,6 +23,18 @@ export const novoId = (prefixo: "reu" | "ana" | "sin" | "men" | "crm" | "cnv" | 
 
 const agora = () => new Date().toISOString();
 
+/**
+ * Leitura para consultas: as reuniões vêm com o nome do cliente (nomeCliente) calculado na hora. As
+ * transações leem o arquivo cru, então o nome calculado nunca é gravado.
+ */
+async function lerBanco(): Promise<Banco> {
+  const banco = await lerBancoGravado();
+  identificarClientes(banco.reuniao);
+  return banco;
+}
+
+const comNome = (reuniao: ReuniaoRegistro) => identificarClientes([reuniao])[0];
+
 /* ---------- Reunião ---------- */
 
 /** Cada reunião é um registro próprio (id + número), mesmo quando o cliente já tem outras: nada é sobrescrito. */
@@ -29,7 +43,7 @@ export async function criarReuniao(dados: Omit<ReuniaoRegistro, "id" | "numero" 
     const reuniao: ReuniaoRegistro = { ...dados, id: novoId("reu"), numero: proximoNumeroReuniao(banco), criadaEm: agora(), atualizadaEm: agora() };
     banco.reuniao.push(reuniao);
     return structuredClone(reuniao);
-  });
+  }).then(comNome);
 }
 
 /** A transcrição da reunião não foi removida (remoção lógica). Só reuniões ativas entram nas consultas. */
@@ -65,7 +79,7 @@ export async function removerTranscricao(reuniaoId: string, usuarioId: string) {
 
 /**
  * Reuniões concluídas cuja transcrição foi removida pela Central: a linha e o código ficam, sem a análise.
- * As que saíram junto com o cliente ("Remover cliente") não voltam aqui: somem da Central.
+ * Reuniões com a marca antiga "cliente_removido" não entram (a leitura do banco já as converte e apaga).
  */
 export async function listarReunioesSemTranscricao(): Promise<ReuniaoRegistro[]> {
   return (await lerBanco()).reuniao.filter(
@@ -75,49 +89,25 @@ export async function listarReunioesSemTranscricao(): Promise<ReuniaoRegistro[]>
 
 /* ---------- Carteira do usuário (dados reais) ---------- */
 
-export async function listarRemocoesCarteira(usuarioId: string): Promise<Set<string>> {
-  return new Set((await lerBanco()).carteira_remocao.filter((r) => r.usuarioId === usuarioId).map((r) => r.contaId));
-}
-
 /**
- * "Remover cliente": tira o cliente da carteira do usuário e remove os insights dele, numa transação.
- * Os insights saem por remoção lógica nas reuniões do cliente (motivo "cliente_removido"): somem da
- * Central, do Dashboard, dos indicadores e do assistente para todos, mas nada é apagado do banco e
- * `desfazerRemocaoCarteira` traz tudo de volta. Devolve quantas reuniões tiveram os insights removidos.
+ * "Excluir cliente": apaga de vez, numa transação, todas as reuniões do cliente e o que derivou delas
+ * (análises, sinais, menções de produto e sincronizações do CRM).
+ * Não há como desfazer. Uma reunião nova desse cliente começa um histórico novo, só com ela.
+ * Compromissos da agenda e conversas do assistente ficam (citações de reuniões apagadas deixam de abrir).
+ * Recusa enquanto alguma reunião do cliente está em análise (o pipeline ainda vai gravar nela).
  */
-export async function registrarRemocaoCarteira(usuarioId: string, contaId: string) {
+export async function excluirReunioesDoCliente(contaId: string) {
   return transacao((banco) => {
-    if (!banco.carteira_remocao.some((r) => r.usuarioId === usuarioId && r.contaId === contaId)) {
-      banco.carteira_remocao.push({ usuarioId, contaId, removidoEm: agora() });
+    const reunioes = banco.reuniao.filter((r) => chaveConta(r) === contaId);
+    if (reunioes.some((r) => r.status === "EM_PROCESSAMENTO")) {
+      throw new ErroRemocao("REUNIAO_EM_PROCESSAMENTO", "Uma reunião deste cliente ainda está sendo analisada. Aguarde a conclusão para excluí-lo.");
     }
-    const em = agora();
-    let reunioes = 0;
-    for (const reuniao of banco.reuniao) {
-      if (chaveConta(reuniao) !== contaId || reuniao.transcricaoRemovida || reuniao.status === "EM_PROCESSAMENTO") continue;
-      reuniao.transcricaoRemovida = { em, usuarioId, motivo: "cliente_removido" };
-      reuniao.atualizadaEm = em;
-      reunioes++;
-    }
-    return { reunioes };
+    apagarReunioes(banco, new Set(reunioes.map((r) => r.id)));
+    return { reunioes: reunioes.length };
   });
 }
 
-/** Devolve o cliente à carteira do usuário e reativa os insights que saíram junto com ele. */
-export async function desfazerRemocaoCarteira(usuarioId: string, contaId: string) {
-  return transacao((banco) => {
-    banco.carteira_remocao = banco.carteira_remocao.filter((r) => !(r.usuarioId === usuarioId && r.contaId === contaId));
-    let reunioes = 0;
-    for (const reuniao of banco.reuniao) {
-      if (chaveConta(reuniao) !== contaId || reuniao.transcricaoRemovida?.motivo !== "cliente_removido") continue;
-      delete reuniao.transcricaoRemovida;
-      reuniao.atualizadaEm = agora();
-      reunioes++;
-    }
-    return { reunioes };
-  });
-}
-
-/** Nome do cliente pelas reuniões dele (inclusive as com insights removidos), para devolvê-lo à carteira. */
+/** Nome do cliente pelas reuniões dele (inclusive as sem transcrição ativa). */
 export async function nomeDoClienteNasReunioes(contaId: string): Promise<string | null> {
   const reuniao = (await lerBanco()).reuniao.find((r) => chaveConta(r) === contaId);
   return reuniao ? nomeConta(reuniao) : null;
@@ -135,7 +125,7 @@ export async function atualizarReuniao(id: string, alterar: (reuniao: ReuniaoReg
     alterar(reuniao);
     reuniao.atualizadaEm = agora();
     return structuredClone(reuniao);
-  });
+  }).then(comNome);
 }
 
 /* ---------- Resultado da análise (análise + sinais + menções, numa transação só) ---------- */

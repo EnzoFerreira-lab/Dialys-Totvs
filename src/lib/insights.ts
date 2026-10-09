@@ -145,6 +145,8 @@ export type IdentidadeReuniao = {
   id: string;
   contaId?: string | null;
   contaNome?: string | null;
+  /** Nome pelo código da TOTVS, preenchido na leitura do banco (identificacao.ts). */
+  nomeCliente?: string | null;
   contexto?: { codigoCliente?: string; idReuniao?: string } | null;
 };
 
@@ -161,6 +163,7 @@ export function chaveConta(reuniao: IdentidadeReuniao) {
 
 export function nomeConta(reuniao: IdentidadeReuniao) {
   if (reuniao.contaNome) return reuniao.contaNome;
+  if (reuniao.nomeCliente) return reuniao.nomeCliente;
   if (reuniao.contexto?.codigoCliente) return `Cliente ${reuniao.contexto.codigoCliente}`;
   if (reuniao.contexto?.idReuniao) return `Reunião #${reuniao.contexto.idReuniao}`;
   return "Cliente não identificado";

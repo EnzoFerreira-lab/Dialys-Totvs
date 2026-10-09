@@ -115,7 +115,7 @@ function MenuExemplos({
           id={menuId}
           role="menu"
           aria-label="Transcrições de exemplo"
-          className="absolute bottom-full left-0 z-20 mb-2 max-h-[min(420px,60vh)] w-[min(360px,calc(100vw-48px))] overflow-y-auto rounded-[4px] border border-border-subtle bg-layer-01 py-1 shadow-[0_2px_6px_rgba(0,0,0,0.12)]"
+          className="absolute top-full left-0 z-20 mt-2 max-h-[min(420px,60vh)] w-[min(360px,calc(100vw-48px))] overflow-y-auto rounded-[4px] border border-border-subtle bg-layer-01 py-1 shadow-[0_2px_6px_rgba(0,0,0,0.12)]"
         >
           {grupos.map((grupo) => (
             <div key={grupo} role="group" aria-label={grupo}>

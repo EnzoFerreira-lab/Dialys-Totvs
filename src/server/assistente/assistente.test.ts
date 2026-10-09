@@ -13,7 +13,7 @@ import { receberEProcessar } from "../pipeline/processar-reuniao";
 import { ErroAssistente, responderPergunta } from "./assistente";
 import { executarFerramenta } from "./ferramentas";
 import { criarCompromisso } from "../agenda/agenda";
-import { removerDaCarteira } from "../clientes/clientes";
+import { excluirCliente } from "../clientes/clientes";
 import { contextoSessao, criarMotorClaude } from "./motor-claude";
 import { criarMotorDemonstracao, interpretarPeriodo } from "./motor-demonstracao";
 
@@ -305,10 +305,10 @@ describe("agenda compartilhada com o assistente", () => {
     expect(seguinte.resposta.texto).toContain("**Grupo Horizonte**");
   });
 
-  it("cliente sem reuniões analisadas (insights removidos): diz isso e não inventa histórico nem evidências", async () => {
+  it("cliente sem reuniões analisadas (cliente excluído): diz isso e não inventa histórico nem evidências", async () => {
     const c = await compromisso(RICARDO, { contaId: "conta-beta" });
-    // Remover o cliente tira os insights dele: o compromisso fica, sem reunião analisada por trás.
-    await removerDaCarteira(RICARDO, "conta-beta");
+    // Excluir o cliente apaga as reuniões dele: o compromisso fica, sem reunião analisada por trás.
+    await excluirCliente(RICARDO, "conta-beta");
     const r = await perguntar("Preparar com o Dialys", { compromissoEmFoco: c.id });
     expect(r.resposta.texto).toContain("ainda não tem reuniões analisadas de **Beta Indústria**");
     expect(r.resposta.texto).not.toMatch(/criticidade|O cliente disse|risco\(s\) de churn/);

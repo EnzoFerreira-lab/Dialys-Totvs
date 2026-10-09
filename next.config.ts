@@ -8,9 +8,10 @@ const nextConfig: NextConfig = {
   redirects() {
     return [{ source: "/jarvis", destination: "/assistente", permanent: true }];
   },
-  // A amostra de reuniões da TOTVS (menu Exemplo) é lida do disco em tempo de execução.
+  // A amostra de reuniões da TOTVS é lida do disco em tempo de execução: no menu Exemplo do /envio e,
+  // em todas as telas e rotas da API, para dar nome aos clientes (src/server/clientes/identificacao.ts).
   outputFileTracingIncludes: {
-    "/envio": ["./data/exemplos/**/*"],
+    "/**": ["./data/exemplos/**/*"],
   },
   turbopack: {
     root: __dirname,

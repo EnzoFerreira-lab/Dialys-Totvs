@@ -197,6 +197,7 @@ function reuniaoDaLista(reuniao: ReuniaoRegistro, analise: AnaliseConcluida | nu
 /** Reuniões ativas e com transcrição removida, agrupadas pela chave do cliente, já no escopo do usuário. */
 async function reunioesPorCliente(usuario: Usuario) {
   const [ativas, removidas] = await Promise.all([listarAnalisesConcluidas(), listarReunioesSemTranscricao()]);
+  const visivel = (id: string) => podeAcessarConta(usuario, id);
   const grupos = new Map<string, { ativas: AnaliseConcluida[]; removidas: ReuniaoRegistro[] }>();
   const grupo = (id: string) => {
     let atual = grupos.get(id);
@@ -205,11 +206,11 @@ async function reunioesPorCliente(usuario: Usuario) {
   };
   for (const analise of ativas) {
     const id = chaveConta(analise.reuniao);
-    if (podeAcessarConta(usuario, id)) grupo(id).ativas.push(analise);
+    if (visivel(id)) grupo(id).ativas.push(analise);
   }
   for (const reuniao of removidas) {
     const id = chaveConta(reuniao);
-    if (podeAcessarConta(usuario, id)) grupo(id).removidas.push(reuniao);
+    if (visivel(id)) grupo(id).removidas.push(reuniao);
   }
   for (const g of grupos.values()) g.ativas.sort(porMomentoDecrescente);
   return grupos;
