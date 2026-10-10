@@ -39,21 +39,24 @@ function linhaCompromisso(c: NonNullable<EntradaMotor["compromisso"]>) {
 }
 
 /** Bloco variável da pergunta: data de hoje, usuário, foco da conversa e compromisso selecionado. */
-export function contextoSessao({ ctx, foco, compromisso }: Pick<EntradaMotor, "ctx" | "foco" | "compromisso">) {
+export function contextoSessao({ ctx, foco, compromisso, empresaSelecionada }: Pick<EntradaMotor, "ctx" | "foco" | "compromisso" | "empresaSelecionada">) {
   const fuso = fusoHorario();
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(ctx.agora);
   const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: fuso }).format(ctx.agora);
   const linhas = [
     `Data de hoje: ${hoje} (${diaSemana}), fuso ${fuso}.`,
     `Usuário: ${ctx.usuario.nome} (${ctx.usuario.papel}).`,
+    empresaSelecionada
+      ? `Modo empresa em foco: o usuário fixou ${empresaSelecionada.nome} (contaId: ${empresaSelecionada.id}). Perguntas que não citam outra empresa são sobre ela.`
+      : null,
     `Empresas em foco na conversa: ${foco.contas.length ? foco.contas.map((c) => `${c.nome} (contaId: ${c.id})`).join("; ") : "nenhuma"}.`,
     `Reuniões em foco: ${foco.reunioes.length ? foco.reunioes.map((r) => `${r.id} (${r.codigo}, ${r.contaNome}, ${r.dataInformada ? dataBr(r.data) : "data não informada"})`).join("; ") : "nenhuma"}.`,
     ...(compromisso ? linhaCompromisso(compromisso) : []),
-  ];
+  ].filter(Boolean);
   return `<contexto_sessao>\n${linhas.join("\n")}\n</contexto_sessao>`;
 }
 
-export function montarMensagens(entrada: Pick<EntradaMotor, "historico" | "pergunta" | "ctx" | "foco" | "compromisso">): Anthropic.Beta.BetaMessageParam[] {
+export function montarMensagens(entrada: Pick<EntradaMotor, "historico" | "pergunta" | "ctx" | "foco" | "compromisso" | "empresaSelecionada">): Anthropic.Beta.BetaMessageParam[] {
   const historico = entrada.historico.slice(-MENSAGENS_DE_HISTORICO);
   // O histórico gravado alterna usuário/assistente; se o corte começar pelo assistente, descarta.
   while (historico[0]?.papel === "assistente") historico.shift();

@@ -16,8 +16,8 @@ export type ResultadoAnalise = {
   analise: Omit<AnaliseReuniao, "sinais"> & { sinais: SinalValidado[] };
   evidencias: Omit<ResultadoValidacao, "sinaisValidos">;
   auditoria: {
-    /** "demonstracao": nenhuma IA foi chamada (ver src/server/ai/demo). */
-    modo: "claude" | "demonstracao";
+    /** "nemotron": NVIDIA Nemotron gratuito via OpenRouter; "demonstracao": nenhuma IA foi chamada (ver src/server/ai/demo). */
+    modo: "claude" | "nemotron" | "demonstracao";
     /** De onde veio a análise no modo demonstração: id do cenário JSON ou "regras locais". */
     origem?: string;
     modeloSolicitado: string;

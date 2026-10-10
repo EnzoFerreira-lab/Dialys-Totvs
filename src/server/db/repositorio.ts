@@ -37,9 +37,41 @@ const comNome = (reuniao: ReuniaoRegistro) => identificarClientes([reuniao])[0];
 
 /* ---------- Reunião ---------- */
 
-/** Cada reunião é um registro próprio (id + número), mesmo quando o cliente já tem outras: nada é sobrescrito. */
+/** A mesma reunião já está no Dashboard (concluída) ou em análise. */
+export class ErroReuniaoDuplicada extends Error {
+  constructor(readonly existente: ReuniaoRegistro) {
+    super(`Reunião já enviada (${existente.id}).`);
+    this.name = "ErroReuniaoDuplicada";
+  }
+}
+
+/** Texto comparável: diferenças de espaço e quebra de linha não tornam uma reunião nova. */
+const textoComparavel = (texto: string | null) => (texto ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * Reunião ativa (concluída ou em análise) com o mesmo texto ou o mesmo ID de reunião da TOTVS. As que
+ * falharam, as com transcrição removida e as de clientes excluídos não contam: podem ser enviadas de novo.
+ */
+function reuniaoDuplicada(banco: Banco, dados: Pick<ReuniaoRegistro, "transcricao" | "contexto">) {
+  const texto = textoComparavel(dados.transcricao);
+  const idReuniao = dados.contexto?.idReuniao;
+  return banco.reuniao.find(
+    (r) =>
+      (r.status === "CONCLUIDA" || r.status === "EM_PROCESSAMENTO") &&
+      transcricaoAtiva(r) &&
+      ((texto && textoComparavel(r.transcricao) === texto) || (idReuniao !== undefined && r.contexto?.idReuniao === idReuniao)),
+  );
+}
+
+/**
+ * Cada reunião é um registro próprio (id + número), mesmo quando o cliente já tem outras: nada é sobrescrito.
+ * A mesma reunião não entra duas vezes (ErroReuniaoDuplicada); a checagem fica na transação para valer
+ * também com dois envios simultâneos.
+ */
 export async function criarReuniao(dados: Omit<ReuniaoRegistro, "id" | "numero" | "criadaEm" | "atualizadaEm">): Promise<ReuniaoRegistro> {
   return transacao((banco) => {
+    const duplicada = reuniaoDuplicada(banco, dados);
+    if (duplicada) throw new ErroReuniaoDuplicada(comNome(structuredClone(duplicada)));
     const reuniao: ReuniaoRegistro = { ...dados, id: novoId("reu"), numero: proximoNumeroReuniao(banco), criadaEm: agora(), atualizadaEm: agora() };
     banco.reuniao.push(reuniao);
     return structuredClone(reuniao);

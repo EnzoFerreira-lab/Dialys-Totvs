@@ -1,6 +1,6 @@
 "use client";
 
-import { Add, Calendar, Close, Renew, Send, VolumeUp, WarningFilled } from "@carbon/icons-react";
+import { Add, Building, Calendar, Close, Renew, Send, VolumeUp, WarningFilled } from "@carbon/icons-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
@@ -9,6 +9,7 @@ import { api, ErroDaApi, type Compromisso, type MensagemAssistenteApi } from "@/
 import { cn } from "@/lib/cn";
 import { BalaoBriefing } from "./balao-briefing";
 import { FontesMensagem } from "./fontes-mensagem";
+import { SeletorEmpresaFoco } from "./seletor-empresa-foco";
 import { TextoFormatado } from "./texto-formatado";
 
 const CHAVE_CONVERSA = "dialys.assistente.conversa";
@@ -25,6 +26,21 @@ const SUGESTOES: Array<{ texto: string; acao?: Acao }> = [
   { texto: "Mostre as reuniões deste mês." },
   { texto: "Explique a ação sugerida para esta empresa." },
   { texto: "Quais oportunidades de upsell foram identificadas?" },
+];
+
+/**
+ * Com uma empresa em foco, as sugestões viram perguntas sobre ela. O servidor sabe qual é a empresa
+ * (filtros.contaId), então "ela" e "esta empresa" bastam; o nome entra só onde ajuda a leitura.
+ */
+const sugestoesDaEmpresa = (nome: string) => [
+  `Avalie a ${nome} em geral`,
+  "Liste os insights desta empresa",
+  "Explique o insight mais crítico",
+  "Quais riscos de churn ela tem?",
+  "Que produtos TOTVS ela usa e onde há upsell?",
+  "Como ela evoluiu entre as reuniões?",
+  "Qual ação devo priorizar com ela?",
+  "Monte uma pauta para a próxima reunião com ela",
 ];
 
 /** Sugestão quando a conversa vem de "Preparar com o Dialys": só é enviada se o usuário clicar. */
@@ -90,10 +106,14 @@ function BalaoAssistente({ mensagem }: { mensagem: MensagemAssistenteApi }) {
  */
 export function ChatAssistente() {
   const params = useSearchParams();
-  const [contaFoco, setContaFoco] = useState(() => {
-    const id = params.get("conta");
-    return id ? { id, nome: params.get("nome") ?? id } : null;
-  });
+  const [contaFoco, setContaFoco] = useState<{ id: string; nome: string } | null>(null);
+  // ?conta= também muda sem recarregar a página (a página fica viva entre navegações): acompanha na renderização.
+  const contaParam = params.get("conta");
+  const [contaLida, setContaLida] = useState<string | null | undefined>(undefined);
+  if (contaParam !== contaLida) {
+    setContaLida(contaParam);
+    setContaFoco(contaParam ? { id: contaParam, nome: params.get("nome") ?? contaParam } : null);
+  }
   const [compromissoFoco, setCompromissoFoco] = useState<FocoCompromisso | null>(null);
   // ?compromisso= muda sem recarregar a página (links da barra lateral): acompanha durante a renderização.
   const compromissoParam = params.get("compromisso");
@@ -241,6 +261,7 @@ export function ChatAssistente() {
 
   const vazio = itens.length === 0;
   const longo = rascunho.length > LIMITE;
+  const sugestoesEmpresa = contaFoco ? sugestoesDaEmpresa(contaFoco.nome) : null;
 
   return (
     <section aria-labelledby="titulo-chat" className="on-shell overflow-hidden rounded-[12px] bg-shell text-shell-text">
@@ -304,11 +325,12 @@ export function ChatAssistente() {
         </div>
       ) : null}
 
-      {contaFoco ? (
-        <div className="flex items-center gap-2 border-b border-white/10 px-5 py-2 text-[12px] sm:px-8">
-          <span className="text-shell-text-secondary">Empresa em foco:</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-interactive/15 py-0.5 pr-1 pl-2.5 text-white">
-            {contaFoco.nome}
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-5 py-2 text-[12px] sm:px-8">
+        <span className="text-shell-text-secondary">Empresa em foco:</span>
+        {contaFoco ? (
+          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-interactive/15 py-0.5 pr-1 pl-2.5 text-white">
+            <Building size={12} aria-hidden="true" />
+            <span className="truncate">{contaFoco.nome}</span>
             <button
               type="button"
               onClick={() => setContaFoco(null)}
@@ -318,8 +340,11 @@ export function ChatAssistente() {
               <Close size={12} />
             </button>
           </span>
-        </div>
-      ) : null}
+        ) : (
+          <span className="text-shell-text-secondary">nenhuma · as perguntas valem para toda a carteira</span>
+        )}
+        <SeletorEmpresaFoco rotulo={contaFoco ? "Trocar" : "Focar em uma empresa"} onEscolher={setContaFoco} desabilitado={processando} />
+      </div>
 
       {/* Histórico */}
       <ol
@@ -334,8 +359,19 @@ export function ChatAssistente() {
         ) : vazio ? (
           <li className="py-2">
             <p className="text-[14px] leading-[1.6] text-[#E0E0E0]">
-              Comece pelo briefing do dia, lido em voz, ou pergunte sobre clientes, reuniões, riscos, oportunidades e ações sugeridas. O
-              Dialys responde só com o que foi analisado e mostra de onde tirou cada informação.
+              {contaFoco ? (
+                <>
+                  Foco em <span className="font-semibold text-white">{contaFoco.nome}</span>: pergunte sem repetir o nome. Avalie a empresa,
+                  liste e explique os insights, veja produtos e oportunidades ou prepare a próxima conversa. O Dialys responde só com o que
+                  foi analisado e mostra de onde tirou cada informação.
+                </>
+              ) : (
+                <>
+                  Comece pelo briefing do dia, lido em voz, ou pergunte sobre clientes, reuniões, riscos, oportunidades e ações sugeridas.
+                  Fixe uma empresa em foco para perguntas e análises só dela. O Dialys responde só com o que foi analisado e mostra de onde
+                  tirou cada informação.
+                </>
+              )}
             </p>
             {compromissoFoco?.compromisso ? (
               <button
@@ -349,7 +385,7 @@ export function ChatAssistente() {
               </button>
             ) : null}
             <ul className="mt-4 flex flex-wrap gap-2" aria-label="Sugestões de perguntas">
-              {SUGESTOES.map((sugestao) => (
+              {(sugestoesEmpresa ? sugestoesEmpresa.map((texto): (typeof SUGESTOES)[number] => ({ texto })) : SUGESTOES).map((sugestao) => (
                 <li key={sugestao.texto}>
                   <button
                     type="button"
@@ -456,6 +492,27 @@ export function ChatAssistente() {
         </p>
       ) : null}
 
+      {/* Atalhos da empresa em foco durante a conversa (na conversa vazia, as sugestões acima já são estas). */}
+      {sugestoesEmpresa && !vazio ? (
+        <div className="border-t border-white/10 px-5 pt-3 sm:px-8">
+          <p className="text-[11px] text-shell-text-secondary">Atalhos para {contaFoco?.nome}</p>
+          <ul className="mt-1.5 flex gap-2 overflow-x-auto pb-1" aria-label={`Atalhos para ${contaFoco?.nome}`}>
+            {sugestoesEmpresa.map((texto) => (
+              <li key={texto} className="shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void enviar(texto)}
+                  disabled={processando}
+                  className="rounded-full border border-white/20 px-3 py-1 text-[12px] whitespace-nowrap text-white transition-colors hover:border-interactive hover:bg-interactive/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {texto}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Campo */}
       <form
         className="border-t border-white/10 px-5 py-4 sm:px-8"
@@ -476,7 +533,7 @@ export function ChatAssistente() {
             onKeyDown={onTeclado}
             rows={1}
             aria-describedby={dicaId}
-            placeholder="Pergunte ao Dialys sobre empresas, reuniões e insights..."
+            placeholder={contaFoco ? `Pergunte sobre ${contaFoco.nome}...` : "Pergunte ao Dialys sobre empresas, reuniões e insights..."}
             className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[14px] leading-[1.5] text-white [field-sizing:content] placeholder:text-[#8D8D8D] focus:outline-none"
           />
           <button

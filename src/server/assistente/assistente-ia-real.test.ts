@@ -6,7 +6,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { USUARIOS } from "../auth/usuarios";
 import { lerBanco } from "../db/banco";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
@@ -22,7 +22,7 @@ describe.skipIf(!ligado)("assistente com a API real do Claude", () => {
     pasta = await mkdtemp(path.join(tmpdir(), "dialys-ia-real-"));
     process.env.DIALYS_BANCO_ARQUIVO = path.join(pasta, "banco.json");
     await receberEProcessar(
-      { conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId: "conta-grupo-horizonte", contaNome: "Grupo Horizonte", contexto: { data: "2026-10-03 10:00:00" } },
+      { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-grupo-horizonte", contaNome: "Grupo Horizonte", contexto: { data: "2026-10-03 10:00:00" } },
       { motor: motorFalso() },
     );
   });

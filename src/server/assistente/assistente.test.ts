@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
 import { lerBanco } from "../db/banco";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
@@ -28,7 +28,7 @@ beforeEach(async () => {
   process.env.DIALYS_BANCO_ARQUIVO = path.join(pasta, "banco.json");
   const motor = motorFalso();
   const reuniao = (contaId: string, contaNome: string, data: string) =>
-    receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId, contaNome, contexto: { data } }, { motor });
+    receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data } }, { motor });
   await reuniao("conta-grupo-horizonte", "Grupo Horizonte", "2026-10-03 10:00:00");
   await reuniao("conta-horizonte-logistica", "Horizonte Logística", "2026-09-15 14:00:00");
   await reuniao("conta-beta", "Beta Indústria", "2026-08-20 09:00:00");
@@ -200,9 +200,12 @@ describe("motor Claude (Tool Runner real com fetch simulado)", () => {
     expect(recebidas).toHaveLength(2);
     expect(recebidas[0].tools.map((t) => t.name)).toEqual([
       "consultar_empresa",
+      "avaliar_empresa",
       "buscar_reunioes",
       "consultar_insights",
+      "explicar_insight",
       "consultar_acoes_sugeridas",
+      "mapear_produtos_empresa",
       "obter_detalhes_reuniao",
       "consultar_agenda",
     ]);

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { ErroAnalise } from "../ai/analisar-reuniao";
 import { lerBanco } from "../db/banco";
 import { listarInsights } from "../db/repositorio";
@@ -24,7 +24,7 @@ const texto = (t: string, extra: Partial<EntradaReuniao> = {}): EntradaReuniao =
 
 describe("pipeline processarReuniao", () => {
   it("texto percorre as 4 etapas e grava reunião, análise, sinais e menções", async () => {
-    const reuniao = await receberEProcessar(texto(TRANSCRICAO_TESTE, { contaId: "c-001" }), { motor: motorFalso() });
+    const reuniao = await receberEProcessar(texto(transcricaoTeste(), { contaId: "c-001" }), { motor: motorFalso() });
 
     expect(reuniao.status).toBe("CONCLUIDA");
     expect(reuniao.etapas.map((e) => [e.nome, e.status])).toEqual([
@@ -50,7 +50,7 @@ describe("pipeline processarReuniao", () => {
   });
 
   it("falha na análise fica registrada na etapa e na reunião", async () => {
-    const reuniao = await receberEProcessar(texto(TRANSCRICAO_TESTE), {
+    const reuniao = await receberEProcessar(texto(transcricaoTeste()), {
       motor: motorFalso(async () => {
         throw new ErroAnalise("recusa", "recusou");
       }),
@@ -65,8 +65,38 @@ describe("pipeline processarReuniao", () => {
 
   it("entrada inválida é recusada sem gravar nada", async () => {
     await expect(receberReuniao(texto("curto"))).rejects.toMatchObject({ codigo: "TRANSCRICAO_VAZIA", httpStatus: 400 });
-    await expect(receberReuniao(texto(TRANSCRICAO_TESTE, { contaId: "conta inválida!" }))).rejects.toBeInstanceOf(ErroEntrada);
+    await expect(receberReuniao(texto(transcricaoTeste(), { contaId: "conta inválida!" }))).rejects.toBeInstanceOf(ErroEntrada);
     expect((await lerBanco()).reuniao).toHaveLength(0);
+  });
+
+  it("a mesma reunião não entra duas vezes enquanto está no Dashboard ou em análise", async () => {
+    const original = transcricaoTeste();
+    const primeira = await receberEProcessar(texto(original, { contaNome: "Grupo Horizonte" }), { motor: motorFalso() });
+    expect(primeira.status).toBe("CONCLUIDA");
+
+    // Mesmo texto, só com espaços e quebras de linha diferentes: duplicada, e nada é gravado.
+    const reformatada = `  ${original.replace(/\n/g, "\n\n").replace(/ /g, "  ")}  `;
+    await expect(receberReuniao(texto(reformatada))).rejects.toMatchObject({
+      codigo: "REUNIAO_DUPLICADA",
+      httpStatus: 409,
+      message: expect.stringContaining("Reunião 001 · Grupo Horizonte"),
+    });
+    // Mesmo ID de reunião da TOTVS, ainda em análise.
+    await receberReuniao(texto(transcricaoTeste(), { contexto: { idReuniao: "4471" } }));
+    await expect(receberReuniao(texto(transcricaoTeste(), { contexto: { idReuniao: "4471" } }))).rejects.toMatchObject({
+      codigo: "REUNIAO_DUPLICADA",
+      message: expect.stringContaining("já está sendo analisada"),
+    });
+    expect((await lerBanco()).reuniao).toHaveLength(2);
+  });
+
+  it("reunião que falhou pode ser enviada de novo", async () => {
+    const original = transcricaoTeste();
+    const recusa = motorFalso(async () => {
+      throw new ErroAnalise("recusa", "recusou");
+    });
+    expect((await receberEProcessar(texto(original), { motor: recusa })).status).toBe("FALHOU");
+    expect((await receberEProcessar(texto(original), { motor: motorFalso() })).status).toBe("CONCLUIDA");
   });
 
   it("áudio não é aceito pela API", async () => {
@@ -80,7 +110,7 @@ describe("pipeline processarReuniao", () => {
 describe("reunião parada no meio (servidor reiniciado ou after() que não rodou)", () => {
   it("a consulta retoma a análise a partir do texto gravado, sem esperar o limite", async () => {
     // Recebida, mas nunca processada neste processo (como depois de um reinício).
-    const recebida = await receberReuniao(texto(TRANSCRICAO_TESTE));
+    const recebida = await receberReuniao(texto(transcricaoTeste()));
     const consultada = await consultarReuniao(recebida.id, { motor: motorFalso() });
     expect(consultada).toMatchObject({ status: "EM_PROCESSAMENTO", retomadas: 1 });
     await vi.waitFor(async () => expect((await lerBanco()).reuniao[0].status).toBe("CONCLUIDA"));
@@ -88,14 +118,14 @@ describe("reunião parada no meio (servidor reiniciado ou after() que não rodou
   });
 
   it("recém-agendada não é retomada; depois de 2 retomadas sem sucesso, falha", async () => {
-    const recebida = await receberReuniao(texto(TRANSCRICAO_TESTE));
+    const recebida = await receberReuniao(texto(transcricaoTeste()));
     agendarProcessamento(recebida.id);
     expect(await consultarReuniao(recebida.id)).toMatchObject({ status: "EM_PROCESSAMENTO" });
     expect((await lerBanco()).reuniao[0].retomadas).toBeUndefined();
 
     // Motor que nunca termina: as retomadas se esgotam.
     const travado = motorFalso(() => new Promise(() => {}));
-    const outra = await receberReuniao(texto(TRANSCRICAO_TESTE));
+    const outra = await receberReuniao(texto(transcricaoTeste()));
     const banco = () => lerBanco().then((b) => b.reuniao.find((r) => r.id === outra.id)!);
     await consultarReuniao(outra.id, { motor: travado });
     // Simula o processo morto: some do registro em execução.

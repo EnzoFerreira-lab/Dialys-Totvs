@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as lerConversa } from "@/app/api/v1/assistente/conversas/[id]/route";
 import { POST as enviar } from "@/app/api/v1/assistente/mensagens/route";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { COOKIE_SESSAO, criarTokenSessao } from "../auth/sessao";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
@@ -27,7 +27,7 @@ beforeEach(async () => {
   process.env.DIALYS_MODO_DEMO = "true";
   USUARIOS.push(OUTRO);
   await receberEProcessar(
-    { conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId: "conta-grupo-horizonte", contaNome: "Grupo Horizonte" },
+    { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-grupo-horizonte", contaNome: "Grupo Horizonte" },
     { motor: motorFalso() },
   );
 });

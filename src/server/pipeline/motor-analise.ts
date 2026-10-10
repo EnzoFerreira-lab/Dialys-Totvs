@@ -3,29 +3,49 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ContextoReuniao } from "@/lib/transcricao";
 import { ErroAnalise, gerarAnalise, type AnaliseGerada } from "../ai/analisar-reuniao";
 import { gerarAnaliseDemo } from "../ai/demo/analisar-reuniao-demo";
+import { ErroApiNemotron, gerarAnaliseNemotron, temChaveNemotron } from "../ai/analisar-reuniao-nemotron";
 import type { FalhaRegistrada } from "../db/banco";
 
 export type MotorAnalise = {
-  nome: "claude" | "demonstracao";
+  nome: "claude" | "nemotron" | "demonstracao";
   gerar: (transcricao: string, contexto?: ContextoReuniao) => Promise<AnaliseGerada>;
 };
 
 export const temChaveClaude = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 /**
- * Simulação local quando pedida (DIALYS_MODO_DEMO=true) ou quando não há chave: sem chave não há
- * como chamar o Claude, e a demonstração não deve parar por isso. Com DIALYS_MODO_DEMO=false e sem
+ * Simulação local quando pedida (DIALYS_MODO_DEMO=true) ou quando não há chave nenhuma (nem do
+ * Nemotron, nem do Claude): a demonstração não deve parar por isso. Com DIALYS_MODO_DEMO=false e sem
  * chave, a análise falha com o passo a passo de configuração.
  */
 export function usarModoDemonstracao() {
-  return process.env.DIALYS_MODO_DEMO === "true" || (!temChaveClaude() && process.env.DIALYS_MODO_DEMO !== "false");
+  return (
+    process.env.DIALYS_MODO_DEMO === "true" ||
+    (!temChaveNemotron() && !temChaveClaude() && process.env.DIALYS_MODO_DEMO !== "false")
+  );
+}
+
+/** Motor que analisa as reuniões: Nemotron (gratuito) tem prioridade; o Claude entra só sem a chave dele. */
+export function nomeMotorAtivo(): MotorAnalise["nome"] {
+  if (usarModoDemonstracao()) return "demonstracao";
+  return temChaveNemotron() || !temChaveClaude() ? "nemotron" : "claude";
 }
 
 export function escolherMotor(opcoes: { atrasoDemoMs?: number } = {}): MotorAnalise {
-  if (usarModoDemonstracao()) {
+  const nome = nomeMotorAtivo();
+  if (nome === "demonstracao") {
     return {
-      nome: "demonstracao",
+      nome,
       gerar: (transcricao, contexto) => gerarAnaliseDemo(transcricao, { contexto, atrasoMs: opcoes.atrasoDemoMs }),
+    };
+  }
+  if (nome === "nemotron") {
+    return {
+      nome,
+      gerar: (transcricao) => {
+        if (!temChaveNemotron()) throw new ErroSemChave();
+        return gerarAnaliseNemotron(transcricao);
+      },
     };
   }
   return {
@@ -41,7 +61,7 @@ export function escolherMotor(opcoes: { atrasoDemoMs?: number } = {}): MotorAnal
 
 class ErroSemChave extends Error {
   constructor() {
-    super("ANTHROPIC_API_KEY não configurada.");
+    super("OPENROUTER_API_KEY não configurada.");
     this.name = "ErroSemChave";
   }
 }
@@ -65,10 +85,11 @@ const FALHAS_ANALISE: Record<ErroAnalise["motivo"], FalhaRegistrada> = {
 export function traduzirErroAnalise(erro: unknown): FalhaRegistrada {
   if (erro instanceof ErroAnalise) return FALHAS_ANALISE[erro.motivo];
   if (erro instanceof ErroSemChave) {
-    return falha(500, "CHAVE_NAO_CONFIGURADA", "Chave da API não configurada", "A análise usa a API do Claude, que precisa de uma chave.", {
+    return falha(500, "CHAVE_NAO_CONFIGURADA", "Chave da API não configurada", "A análise usa o Nemotron gratuito via OpenRouter, que precisa de uma chave.", {
       semChave: true,
     });
   }
+  if (erro instanceof ErroApiNemotron) return traduzirErroNemotron(erro);
   // Todas as abaixo estendem APIError: a ordem importa.
   if (erro instanceof Anthropic.AuthenticationError) {
     return falha(500, "CHAVE_INVALIDA", "Chave da API inválida", "Confira o valor de ANTHROPIC_API_KEY no arquivo .env.local.", {
@@ -93,4 +114,25 @@ export function traduzirErroAnalise(erro: unknown): FalhaRegistrada {
   }
   console.error("[dialys/pipeline] erro inesperado na análise", erro);
   return falha(500, "ERRO_INTERNO", "Erro inesperado", "Não foi possível concluir a análise. Veja o terminal do servidor para detalhes.");
+}
+
+function traduzirErroNemotron(erro: ErroApiNemotron): FalhaRegistrada {
+  switch (erro.status) {
+    case 0:
+      return falha(502, "SEM_CONEXAO_API", "Sem conexão com o Nemotron", "Verifique a internet e tente novamente. Se a reunião for longa, o modelo gratuito pode ter passado do tempo limite.");
+    case 401:
+      return falha(500, "CHAVE_INVALIDA", "Chave da API inválida", "Confira o valor de OPENROUTER_API_KEY no arquivo .env.local.", { semChave: true });
+    case 402:
+      return falha(502, "API_RECUSOU", "A API recusou a requisição", `${erro.message} Confira se o modelo configurado é a versão gratuita (termina em ":free").`);
+    case 403:
+      return falha(502, "SEM_PERMISSAO_MODELO", "Sem permissão na API", erro.message);
+    case 404:
+      return falha(502, "MODELO_NAO_ENCONTRADO", "Modelo não encontrado", `${erro.message} Confira DIALYS_NEMOTRON_MODELO.`);
+    case 429:
+      return falha(503, "LIMITE_DE_USO", "Limite de uso atingido", "O plano gratuito do Nemotron tem limite por minuto e por dia. Aguarde e tente de novo.");
+    default:
+      return erro.status >= 400 && erro.status < 500
+        ? falha(502, "API_RECUSOU", "A API recusou a requisição", erro.message)
+        : falha(502, "API_INDISPONIVEL", "Serviço do Nemotron indisponível", `Erro ${erro.status}: ${erro.message}. Tente novamente em instantes.`);
+  }
 }

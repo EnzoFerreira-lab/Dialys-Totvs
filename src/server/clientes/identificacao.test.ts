@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { nomeConta } from "@/lib/insights";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { listarAnalisesConcluidas } from "../db/repositorio";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar } from "../pipeline/processar-reuniao";
@@ -57,9 +57,9 @@ describe("nome do cliente", () => {
   it("as consultas trazem o nome, que não é gravado; o nome escolhido no envio continua valendo", async () => {
     await gravarNomes({ T54451: "Hospital Exemplo Ltda" }, 3_000);
     const contexto = { codigoCliente: "T54451", segmento: "Saúde", uf: "RS" };
-    await receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contexto }, { motor: motorFalso() });
+    await receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contexto }, { motor: motorFalso() });
     await receberEProcessar(
-      { conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contexto: { codigoCliente: "T00274" }, contaNome: "Escolhido no Envio" },
+      { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contexto: { codigoCliente: "T00274" }, contaNome: "Escolhido no Envio" },
       { motor: motorFalso() },
     );
 

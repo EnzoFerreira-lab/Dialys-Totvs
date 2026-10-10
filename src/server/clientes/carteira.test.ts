@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inicioDaSemana, paraInstante, somarDias } from "@/lib/fuso";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { executarFerramenta } from "../assistente/ferramentas";
 import { COOKIE_SESSAO, criarTokenSessao } from "../auth/sessao";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
@@ -53,7 +53,7 @@ const ids = async (usuario: Usuario) => (await listarClientes(usuario, { limite:
 const hoje = () => new Intl.DateTimeFormat("en-CA", { timeZone: FUSO }).format(new Date());
 const futuro = (hora: string) => paraInstante(somarDias(inicioDaSemana(hoje()), 16), hora, FUSO).toISOString();
 const reuniao = (contaId: string, contaNome: string, data: string) =>
-  receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId, contaNome, contexto: { data } }, { motor: motorFalso() });
+  receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data } }, { motor: motorFalso() });
 
 let pasta: string;
 beforeEach(async () => {
@@ -117,13 +117,13 @@ describe("excluir cliente", () => {
 
   it("reunião nova de um cliente excluído começa um histórico novo, só com ela", async () => {
     await removerDe(RICARDO, "conta-horizonte");
-    expect((await enviar(RICARDO, { texto: TRANSCRICAO_TESTE, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" })).status).toBe(201);
+    expect((await enviar(RICARDO, { texto: transcricaoTeste(), contaId: "conta-horizonte", contaNome: "Grupo Horizonte" })).status).toBe(201);
     expect((await listarClientesUnificados(RICARDO)).find((c) => c.id === "conta-horizonte")?.totalReunioes).toBe(1);
     expect((await listarReunioesCentral()).filter((r) => r.conta.id === "conta-horizonte")).toHaveLength(1);
   });
 
   it("recusa (409) enquanto uma reunião do cliente está em análise, sem apagar nada", async () => {
-    await receberReuniao({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" });
+    await receberReuniao({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" });
     const resposta = await removerDe(RICARDO, "conta-horizonte");
     expect(resposta.status).toBe(409);
     expect((await resposta.json()).erro.codigo).toBe("REUNIAO_EM_PROCESSAMENTO");

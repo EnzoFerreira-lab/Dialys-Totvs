@@ -90,7 +90,7 @@ function nomeCapitalizado(pergunta: string) {
 export function criarMotorDemonstracao(): MotorAssistente {
   return {
     nome: "demonstracao",
-    async responder({ pergunta, foco, consultar, ctx, compromisso }: EntradaMotor) {
+    async responder({ pergunta, foco, consultar, ctx, compromisso, empresaSelecionada }: EntradaMotor) {
       const q = normalizarBusca(pergunta);
       const agora = ctx.agora;
 
@@ -117,7 +117,24 @@ export function criarMotorDemonstracao(): MotorAssistente {
         return { texto: `Encontrei mais de uma empresa para "${citadas.termo}":\n${lista(empresas)}\n\nDe qual delas você está falando?` };
       }
       const referenciaFoco = /\b(essa|esta|dessa|desta|nessa|nesta)\s+(empresa|conta|cliente)\b|\bdela\b|\bdeles\b/.test(q);
-      let contaId = citadas.conta?.id ?? null;
+      // Modo empresa em foco: sem outra empresa citada, a pergunta é sobre a empresa fixada na tela.
+      const carteira = /carteira|clientes|contas|todas as empresas|quais empresas/.test(q);
+      let contaId = citadas.conta?.id ?? (empresaSelecionada && !carteira ? empresaSelecionada.id : null);
+
+      // Perguntas próprias de uma empresa: avaliação geral, explicação de insight, produtos e lista de insights.
+      const alvoEmpresa = contaId ?? (referenciaFoco ? (foco.contas[0]?.id ?? null) : null);
+      if (alvoEmpresa && /avali|visao geral|panorama|saude|evolu|vale (a pena )?investir/.test(q)) {
+        return { texto: textoAvaliacao(await consultar("avaliar_empresa", { contaId: alvoEmpresa })) };
+      }
+      if (alvoEmpresa && /expli[cq]|entender|por que|porque/.test(q) && /insight|sinal|alerta|risco|oportunidad|objec|mais critico/.test(q)) {
+        return { texto: textoExplicacao(await consultar("explicar_insight", { contaId: alvoEmpresa })) };
+      }
+      if (alvoEmpresa && /produto|ecossistema|upsell|cross|concorren|portfolio/.test(q)) {
+        return { texto: textoProdutos(await consultar("mapear_produtos_empresa", { contaId: alvoEmpresa })) };
+      }
+      if (alvoEmpresa && /\b(liste|listar|todos os|quais (sao )?os)\b.*\b(insights?|sinais|alertas)\b/.test(q)) {
+        return { texto: textoInsightsEmpresa(await consultar("consultar_insights", { contaId: alvoEmpresa, limite: 20 })) };
+      }
 
       const intencao = {
         novaSugestao: /(nova|outra)s?\s+(sugest|recomend|ideia)|\bsugira\b|me de uma sugest/.test(q),
@@ -314,6 +331,91 @@ function textoDetalhes(r: ResultadoFerramenta) {
   return `**${e.nome}**, ${reuniaoTexto(reu)}.\n\n${r.dados.resumo}${
     trechos.length ? `\n\nO que o cliente disse (trechos literais):\n${lista(trechos)}` : "\n\nEssa reunião não tem trechos destacados."
   }`;
+}
+
+/* ---------- Empresa em foco ---------- */
+
+const NOME_CATEGORIA: Record<string, string> = { risco_churn: "Risco de churn", oportunidade: "Oportunidade", objecao: "Objeção" };
+const blocos = (partes: Array<string | null>) => partes.filter(Boolean).join("\n\n");
+
+function textoAvaliacao(r: ResultadoFerramenta) {
+  const erro = erroOu(r);
+  if (erro) return erro;
+  const d = r.dados;
+  const e = d.empresa as Dados;
+  const saude = d.saude as Dados | null;
+  const alertas = d.alertas as Record<string, { total: number; alta: number }>;
+  const evolucao = ((d.evolucao as Dados[]) ?? []).map(
+    (x) => `${x.codigo} (${x.data === "data não informada" ? x.data : dataBr(String(x.data))}): saúde ${x.saude ?? "—"}`,
+  );
+  const temas = ((d.temasRecorrentes as Dados[]) ?? []).map((t) => `${t.subtipo} (${(t.reunioes as string[]).join(", ")})`);
+  const produtos = ((d.produtos as Dados[]) ?? []).map((p) => `${p.produto}: ${String(p.status).replace("_", " ")}`);
+  const criticos = ((d.alertasMaisCriticos as Dados[]) ?? [])
+    .slice(0, 3)
+    .map((a) => `${a.subtipo} (${a.criticidade}, ${a.reuniao}): “${a.citacaoLiteral}”`);
+  return blocos([
+    `**${e.nome}**: saúde ${saude ? `${saude.nota}/10 (${saude.faixa})` : "não calculada"}, criticidade ${d.criticidade ?? "—"}, tendência ${d.tendencia}${
+      d.nps !== null ? `, NPS ${d.nps}` : ""
+    }. ${d.reunioesAnalisadas} reunião(ões) analisada(s).`,
+    `Alertas: ${alertas.risco_churn.total} risco(s) de churn (${alertas.risco_churn.alta} de criticidade alta), ${alertas.oportunidade.total} oportunidade(s) e ${alertas.objecao.total} objeção(ões).`,
+    criticos.length ? `Mais críticos:\n${lista(criticos)}` : null,
+    evolucao.length > 1 ? `Evolução:\n${lista(evolucao)}` : null,
+    temas.length ? `Temas que se repetem:\n${lista(temas)}` : null,
+    produtos.length ? `Produtos:\n${lista(produtos)}` : null,
+    d.acaoPrincipalRegistrada ? `**Ação registrada:** ${d.acaoPrincipalRegistrada}` : null,
+  ]);
+}
+
+function textoExplicacao(r: ResultadoFerramenta) {
+  const erro = erroOu(r);
+  if (erro) return erro;
+  const i = r.dados.insight as Dados | null;
+  if (!i) return String(r.dados.mensagem ?? "Não há insights para explicar.");
+  const e = r.dados.empresa as Dados;
+  const trecho = i.trechoDaConversa as Dados | null;
+  const repeticoes = (r.dados.mesmoTemaEmOutrasReunioes as Dados[]) ?? [];
+  return blocos([
+    `**${e.nome}**, ${reuniaoTexto(r.dados.reuniao as Dados)}: ${NOME_CATEGORIA[String(i.categoria)]} · ${i.subtipo}, criticidade ${i.criticidade} (confiança ${Math.round(
+      Number(i.confianca) * 100,
+    )}%).`,
+    `O cliente disse: “${i.citacaoLiteral}”`,
+    trecho ? `Contexto da conversa (${trecho.falante}): “${trecho.trecho}”` : null,
+    repeticoes.length
+      ? `O mesmo tema aparece em ${repeticoes.length} outra(s) reunião(ões): ${repeticoes.map((x) => reuniaoTexto(x.reuniao as Dados)).join("; ")}.`
+      : "O tema não aparece em outras reuniões desta empresa.",
+    `**Recomendação registrada:** ${i.recomendacaoRegistrada}${i.enviadoAoCrm ? " (já enviada ao CRM)" : ""}`,
+  ]);
+}
+
+function textoProdutos(r: ResultadoFerramenta) {
+  const erro = erroOu(r);
+  if (erro) return erro;
+  const d = r.dados;
+  const nomes = (itens: unknown) => ((itens as Dados[]) ?? []).map((p) => String(p.produto));
+  const grupos: Array<[string, string[]]> = [
+    ["Em uso", nomes(d.emUso)],
+    ["Interesse", nomes(d.interesse)],
+    ["Insatisfação", nomes(d.insatisfacao)],
+    ["Concorrentes citados", nomes(d.concorrentesCitados)],
+  ];
+  const oportunidades = ((d.oportunidadesRegistradas as Dados[]) ?? []).map((o) => `${o.subtipo} (${o.reuniao}): “${o.citacaoLiteral}”`);
+  return blocos([
+    `**${(d.empresa as Dados).nome}**: produtos citados nas reuniões analisadas.`,
+    lista(grupos.map(([rotulo, itens]) => `${rotulo}: ${itens.length ? itens.join(", ") : "nenhum"}`)),
+    oportunidades.length ? `Oportunidades registradas:\n${lista(oportunidades)}` : null,
+    `Portfólio TOTVS que não apareceu nas conversas: ${(d.portfolioTotvsNaoCitado as string[]).join(", ")}. Isso não indica necessidade do cliente.`,
+  ]);
+}
+
+function textoInsightsEmpresa(r: ResultadoFerramenta) {
+  const erro = erroOu(r);
+  if (erro) return erro;
+  const insights = (r.dados.insights as Dados[]) ?? [];
+  if (insights.length === 0) return "Não há insights registrados para esta empresa nas reuniões analisadas.";
+  const itens = insights.map(
+    (i, n) => `${n + 1}. ${NOME_CATEGORIA[String(i.categoria)]} · ${i.subtipo}, ${i.criticidade} (${reuniaoTexto(i.reuniao as Dados)}): “${i.citacaoLiteral}”`,
+  );
+  return `${r.dados.total} insight(s) de **${(insights[0].empresa as Dados).nome}**, do mais crítico para o menos:\n${itens.join("\n")}${parcial(r.dados, insights.length)}`;
 }
 
 /* ---------- Agenda ---------- */

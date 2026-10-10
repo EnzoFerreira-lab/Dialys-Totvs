@@ -7,7 +7,9 @@ import { z } from "zod";
 import { chaveConta, codigoReuniao, criticidadeConta, dataDaReuniao, nomeConta, temDataInformada, type ContaInsight } from "@/lib/insights";
 import { normalizarBusca } from "@/lib/formatar";
 import { dataNoFuso, horaNoFuso, somarDias } from "@/lib/fuso";
+import { PRODUTOS_TOTVS } from "../ai/schemas";
 import { listarCompromissos } from "../agenda/agenda";
+import { montarPerfilCliente } from "../clientes/perfil";
 import { fusoHorario } from "../config/dados";
 import type { ReuniaoRegistro } from "../db/banco";
 import { listarAnalisesConcluidas, type AnaliseConcluida } from "../db/repositorio";
@@ -460,7 +462,217 @@ export const consultarAgenda = definir({
   },
 });
 
-export const FERRAMENTAS = [consultarEmpresa, buscarReunioes, consultarInsights, consultarAcoesSugeridas, obterDetalhesReuniao, consultarAgenda] as const;
+/* ---------- Consultas de uma empresa (modo empresa em foco) ---------- */
+
+const ROTULO_TIPO = { churn: "risco_churn", oportunidade: "oportunidade", objecao: "objecao" } as const;
+const ROTULO_PRODUTO = { em_uso: "em_uso", expansao: "interesse", insatisfacao: "insatisfacao", concorrente: "concorrente" } as const;
+const ROTULO_TENDENCIA = { melhorou: "melhorou", piorou: "piorou", estavel: "estável" } as const;
+
+/** Perfil completo da conta (todas as reuniões ativas), só se o usuário puder vê-la. */
+async function perfilPermitido(ctx: ContextoConsulta, contaId: string) {
+  if (!(await contaPermitida(ctx, contaId))) return null;
+  return montarPerfilCliente(ctx.usuario, contaId);
+}
+
+/** Reuniões que viram fonte: as ativas da conta, da mais recente para a mais antiga. */
+async function reunioesDaConta(ctx: ContextoConsulta, contaId: string, limiteReunioes = 3) {
+  const { analises } = await dadosPermitidos(ctx);
+  return analises.filter((a) => chaveConta(a.reuniao) === contaId).slice(0, limiteReunioes).map(entidadeReuniao);
+}
+
+export const avaliarEmpresa = definir({
+  nome: "avaliar_empresa",
+  descricao:
+    "Avaliação geral de UMA empresa com base em TODAS as reuniões analisadas dela: saúde (0 a 10) e faixa, criticidade, tendência entre as duas últimas reuniões, força da relação, NPS, evolução reunião a reunião, contagem de alertas por categoria e criticidade, alertas mais críticos, temas que se repetem em mais de uma reunião, produtos TOTVS e concorrentes, ação registrada, próximos passos, envio ao CRM e próximos compromissos do usuário com o cliente. Use para \"como está esta empresa?\", \"avalie a empresa\", \"vale a pena investir?\" ou para preparar uma conversa.",
+  esquema: z.object({ contaId: idConta }),
+  async executar(ctx, args) {
+    const perfil = await perfilPermitido(ctx, args.contaId);
+    if (!perfil) return naoEncontrada("Conta", args.contaId);
+    const ativas = perfil.reunioes.filter((r) => !r.transcricaoRemovida);
+    const contarAlertas = (tipo: keyof typeof ROTULO_TIPO) => {
+      const doTipo = perfil.alertas.filter((a) => a.tipo === tipo);
+      return { total: doTipo.length, alta: doTipo.filter((a) => a.severidade === "ALTA").length };
+    };
+    // Mesmo tema (categoria + subtipo) em mais de uma reunião: padrão, não caso isolado.
+    const temas = new Map<string, { categoria: string; subtipo: string; reunioes: Set<string> }>();
+    for (const a of perfil.alertas) {
+      const chave = `${a.tipo}|${normalizarBusca(a.subtipo)}`;
+      const tema = temas.get(chave) ?? { categoria: ROTULO_TIPO[a.tipo], subtipo: a.subtipo, reunioes: new Set<string>() };
+      tema.reunioes.add(a.reuniao.codigo);
+      temas.set(chave, tema);
+    }
+    const hoje = ctx.agora.toISOString();
+    const proximos = perfil.compromissos.filter((c) => c.status === "agendado" && c.fim >= hoje).slice(0, 3);
+    const fuso = fusoHorario();
+    return {
+      dados: {
+        empresa: { contaId: perfil.id, nome: perfil.nome, segmento: perfil.segmento, codigoTotvs: perfil.codigoTotvs },
+        saude: perfil.saude ? { nota: perfil.saude.nota, faixa: perfil.saude.faixa, fatores: perfil.saude.fatores } : null,
+        criticidade: perfil.criticidade ? { alta: "ALTA", atencao: "ATENÇÃO", baixa: "BAIXA" }[perfil.criticidade] : null,
+        tendencia: perfil.tendencia ? ROTULO_TENDENCIA[perfil.tendencia] : "sem comparação (só uma reunião analisada)",
+        relacao: perfil.relacao,
+        nps: perfil.nps,
+        reunioesAnalisadas: ativas.length,
+        evolucao: ativas.slice(0, 8).map((r) => ({
+          codigo: r.codigo,
+          data: r.data ?? "data não informada",
+          saude: r.saude?.nota ?? null,
+          sinais: { risco_churn: r.sinais.churn, oportunidade: r.sinais.oportunidade, objecao: r.sinais.objecao },
+          resumo: r.resumo ? cortar(r.resumo, 280) : null,
+        })),
+        alertas: { risco_churn: contarAlertas("churn"), oportunidade: contarAlertas("oportunidade"), objecao: contarAlertas("objecao") },
+        alertasMaisCriticos: perfil.alertas.slice(0, 5).map((a) => ({
+          insightId: a.id,
+          categoria: ROTULO_TIPO[a.tipo],
+          subtipo: a.subtipo,
+          criticidade: a.severidade,
+          citacaoLiteral: cortar(a.citacao, 220),
+          reuniao: `${a.reuniao.codigo}, ${a.reuniao.data ? dataBr(a.reuniao.data) : "data não informada"}`,
+        })),
+        temasRecorrentes: [...temas.values()]
+          .filter((t) => t.reunioes.size > 1)
+          .map((t) => ({ categoria: t.categoria, subtipo: t.subtipo, reunioes: [...t.reunioes] })),
+        produtos: perfil.produtos.map((p) => ({ produto: p.nome, status: ROTULO_PRODUTO[p.contexto], reunioes: p.reunioes })),
+        acaoPrincipalRegistrada: perfil.acao,
+        proximosPassosRegistrados: perfil.proximosPassos,
+        diagnosticoUltimaReuniao: perfil.diagnostico ? cortar(perfil.diagnostico, 500) : null,
+        enviadosAoCrm: `${perfil.alertas.filter((a) => a.noCrm).length} de ${perfil.alertas.length} alerta(s)`,
+        proximosCompromissos: proximos.map((c) => ({
+          titulo: c.titulo,
+          data: dataNoFuso(new Date(c.inicio), fuso),
+          inicio: horaNoFuso(new Date(c.inicio), fuso),
+        })),
+        procedencia: { analisePorRegras: !perfil.geradoPorIa },
+        link: linkConta(perfil.id),
+      },
+      resumo: `avaliação de ${perfil.nome} (${ativas.length} reunião(ões))`,
+      entidades: { contas: [{ id: perfil.id, nome: perfil.nome }], reunioes: await reunioesDaConta(ctx, perfil.id) },
+    };
+  },
+});
+
+export const explicarInsight = definir({
+  nome: "explicar_insight",
+  descricao:
+    "Explica UM insight (sinal) em profundidade: categoria, subtipo, criticidade, confiança, citação literal, o trecho da conversa em volta dela (quem falou e o contexto), a reunião e o resumo dela, a recomendação registrada, se o mesmo tema aparece em outras reuniões da empresa e se já foi enviado ao CRM. Informe o insightId (devolvido por consultar_insights ou avaliar_empresa) ou só o contaId para explicar o insight mais crítico da empresa.",
+  esquema: z
+    .object({
+      insightId: z.string().regex(/^sin_[0-9a-f]{32}$/, "use o insightId (formato sin_<32 hex>)").optional(),
+      contaId: idConta.optional().describe("Sem insightId: explica o insight mais crítico desta empresa."),
+    })
+    .refine((a) => Boolean(a.insightId) || Boolean(a.contaId), { message: "informe insightId ou contaId." }),
+  async executar(ctx, args) {
+    const { analises } = await dadosPermitidos(ctx);
+    let insightId = args.insightId;
+    if (!insightId && args.contaId) {
+      const perfil = await perfilPermitido(ctx, args.contaId);
+      if (!perfil) return naoEncontrada("Conta", args.contaId);
+      if (!perfil.alertas.length) {
+        return {
+          dados: { insight: null, mensagem: `${perfil.nome} não tem insights registrados nas reuniões analisadas.` },
+          resumo: `${perfil.nome} sem insights`,
+          entidades: { contas: [{ id: perfil.id, nome: perfil.nome }], reunioes: [] },
+        };
+      }
+      insightId = perfil.alertas[0].id;
+    }
+    // Só sinais de reuniões ativas no escopo do usuário; outro caso responde como inexistente.
+    const achado = analises.flatMap((a) => a.resultado.analise.sinais.map((s) => ({ a, s }))).find(({ s }) => s.id === insightId);
+    if (!achado) return naoEncontrada("Insight", insightId ?? "");
+    const { a, s } = achado;
+    const contaId = chaveConta(a.reuniao);
+    const [evidencia] = a.reuniao.transcricao ? montarEvidencias(a.reuniao.transcricao, [s]) : [];
+    const mesmoTema = analises
+      .filter((outra) => chaveConta(outra.reuniao) === contaId && outra.reuniao.id !== a.reuniao.id)
+      .flatMap((outra) =>
+        outra.resultado.analise.sinais
+          .filter((x) => x.tipo === s.tipo && normalizarBusca(x.subtipo) === normalizarBusca(s.subtipo))
+          .map((x) => ({ reuniao: refReuniao(outra.reuniao), criticidade: x.severidade, citacaoLiteral: cortar(x.citacaoExata, 200) })),
+      );
+    return {
+      dados: {
+        insight: {
+          insightId: s.id,
+          categoria: CATEGORIA[s.tipo],
+          subtipo: s.subtipo,
+          criticidade: s.severidade,
+          confianca: s.confianca,
+          citacaoLiteral: s.citacaoExata,
+          trechoDaConversa: evidencia ? { falante: evidencia.falante, trecho: cortar(evidencia.texto, 600) } : null,
+          recomendacaoRegistrada: s.recomendacaoAcao,
+          enviadoAoCrm: a.sincronizacoes.some((x) => x.sinalId === s.id),
+        },
+        empresa: { contaId, nome: nomeConta(a.reuniao) },
+        reuniao: { ...refReuniao(a.reuniao), resumo: cortar(a.resultado.analise.resumoExecutivo, 400) },
+        produtosNaReuniao: a.resultado.analise.mencoesProdutos.map((m) => `${m.produto} (${m.status})`),
+        mesmoTemaEmOutrasReunioes: mesmoTema,
+        procedencia: procedencia(a),
+        link: linkReuniao(a.reuniao.id),
+      },
+      resumo: `insight ${s.subtipo} (${nomeConta(a.reuniao)}, ${codigoReuniao(a.reuniao.numero)})`,
+      entidades: { contas: [{ id: contaId, nome: nomeConta(a.reuniao) }], reunioes: [entidadeReuniao(a)] },
+    };
+  },
+});
+
+export const mapearProdutosEmpresa = definir({
+  nome: "mapear_produtos_empresa",
+  descricao:
+    "Mapa do ecossistema de produtos de UMA empresa em todas as reuniões: produtos TOTVS em uso, com interesse e com insatisfação, concorrentes citados, as oportunidades registradas (com citação) e os produtos do portfólio TOTVS que nunca apareceram nas conversas. Use para upsell, cross-sell, risco competitivo e \"quais produtos ela usa?\".",
+  esquema: z.object({ contaId: idConta }),
+  async executar(ctx, args) {
+    const perfil = await perfilPermitido(ctx, args.contaId);
+    if (!perfil) return naoEncontrada("Conta", args.contaId);
+    const porStatus = (contexto: keyof typeof ROTULO_PRODUTO) =>
+      perfil.produtos.filter((p) => p.contexto === contexto).map((p) => ({ produto: p.nome, reunioes: p.reunioes }));
+    // Citado = está nas menções da análise ou aparece pelo nome curto ("RM", "Fluig") em uma citação ou
+    // recomendação; sem isso, "interesse no RM Folha" conviveria com "TOTVS RM nunca citado".
+    const textos = perfil.alertas.map((a) => `${a.citacao} ${a.recomendacao}`).join(" ");
+    const citados = new Set(perfil.produtos.map((p) => p.nome));
+    for (const produto of PRODUTOS_TOTVS) {
+      const curto = produto.replace(/^TOTVS /, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`(^|[^\\p{L}])${curto}($|[^\\p{L}])`, "u").test(textos)) citados.add(produto);
+    }
+    return {
+      dados: {
+        empresa: { contaId: perfil.id, nome: perfil.nome, segmento: perfil.segmento },
+        emUso: porStatus("em_uso"),
+        interesse: porStatus("expansao"),
+        insatisfacao: porStatus("insatisfacao"),
+        concorrentesCitados: porStatus("concorrente"),
+        oportunidadesRegistradas: perfil.alertas
+          .filter((a) => a.tipo === "oportunidade")
+          .slice(0, 6)
+          .map((a) => ({
+            insightId: a.id,
+            subtipo: a.subtipo,
+            criticidade: a.severidade,
+            citacaoLiteral: cortar(a.citacao, 220),
+            recomendacaoRegistrada: a.recomendacao,
+            reuniao: `${a.reuniao.codigo}, ${a.reuniao.data ? dataBr(a.reuniao.data) : "data não informada"}`,
+          })),
+        portfolioTotvsNaoCitado: PRODUTOS_TOTVS.filter((p) => !citados.has(p)),
+        observacao: "Produtos não citados não indicam necessidade do cliente: só que não apareceram nas reuniões analisadas.",
+        procedencia: { analisePorRegras: !perfil.geradoPorIa },
+        link: linkConta(perfil.id),
+      },
+      resumo: `produtos de ${perfil.nome}`,
+      entidades: { contas: [{ id: perfil.id, nome: perfil.nome }], reunioes: await reunioesDaConta(ctx, perfil.id, 2) },
+    };
+  },
+});
+
+export const FERRAMENTAS = [
+  consultarEmpresa,
+  avaliarEmpresa,
+  buscarReunioes,
+  consultarInsights,
+  explicarInsight,
+  consultarAcoesSugeridas,
+  mapearProdutosEmpresa,
+  obterDetalhesReuniao,
+  consultarAgenda,
+] as const;
 
 /**
  * Executa uma ferramenta pelo nome com argumentos não confiáveis (vindos da IA): valida pelo schema

@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inicioDaSemana, paraInstante, somarDias } from "@/lib/fuso";
 import { COOKIE_SESSAO, criarTokenSessao } from "../auth/sessao";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar } from "../pipeline/processar-reuniao";
@@ -50,7 +50,7 @@ beforeEach(async () => {
     ["c-002", "Rede Bom Preço Supermercados"],
     ["c-003", "Clínica Santa Aurora"],
   ]) {
-    await receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId, contaNome }, { motor: motorFalso() });
+    await receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome }, { motor: motorFalso() });
   }
 });
 afterEach(async () => {

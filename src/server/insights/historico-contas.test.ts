@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
 import { listarClientes } from "../clientes/clientes";
 import { lerBanco } from "../db/banco";
@@ -16,7 +16,7 @@ const RESTRITO: Usuario = { id: "usr_restrito", nome: "Vendedor", email: "v@t.br
 
 const reuniao = (contaId: string, contaNome: string, data: string, nps?: number) =>
   receberEProcessar(
-    { conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId, contaNome, contexto: { data, ...(nps !== undefined ? { nps } : {}), duracao: "00:44:40" } },
+    { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data, ...(nps !== undefined ? { nps } : {}), duracao: "00:44:40" } },
     { motor: motorFalso() },
   );
 

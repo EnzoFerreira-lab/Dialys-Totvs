@@ -115,7 +115,7 @@ export type MensagemConversa = {
   /** Id gerado pelo navegador para a pergunta: reenviar o mesmo id não duplica a troca. */
   idCliente?: string;
   /** "demonstracao": resposta montada por regras a partir do banco, sem IA. */
-  modo?: "claude" | "demonstracao";
+  modo?: "claude" | "nemotron" | "demonstracao";
   fontes?: FonteMensagem[];
   consultas?: ConsultaRegistrada[];
   /** "briefing": resposta do briefing do dia, a única que a tela lê em voz. */

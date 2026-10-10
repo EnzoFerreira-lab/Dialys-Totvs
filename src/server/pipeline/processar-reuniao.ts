@@ -1,6 +1,6 @@
 // Pipeline de processamento de uma reunião (só texto: o Dialys não recebe áudio), em 4 etapas:
 //   1. RECEBIMENTO          valida e sanitiza a entrada e registra a reunião (status EM_PROCESSAMENTO)
-//   2. ANALISE_IA           Claude (ou as regras locais, sem chave) gera sinais, produtos e resumo
+//   2. ANALISE_IA           Nemotron (ou Claude, ou as regras locais sem chave) gera sinais, produtos e resumo
 //   3. VALIDACAO_EVIDENCIAS só ficam sinais cuja citação existe literalmente na transcrição
 //   4. PERSISTENCIA         grava analise, sinal e mencao_produto e conclui a reunião
 // O estado de cada etapa é gravado ao entrar e ao sair, então a API mostra o progresso e uma falha
@@ -10,7 +10,8 @@ import { ContextoReuniaoSchema, normalizarTranscricao, type ContextoReuniao } fr
 import type { ResultadoAnalise } from "../ai/analisar-reuniao";
 import { validarEvidencias } from "../ai/validar-evidencia";
 import type { Etapa, FalhaRegistrada, NomeEtapa, ReuniaoRegistro, StatusEtapa } from "../db/banco";
-import { atualizarReuniao, buscarReuniao, criarReuniao, salvarResultado } from "../db/repositorio";
+import { codigoReuniao } from "@/lib/insights";
+import { atualizarReuniao, buscarReuniao, criarReuniao, ErroReuniaoDuplicada, salvarResultado } from "../db/repositorio";
 import { escolherMotor, traduzirErroAnalise, type MotorAnalise } from "./motor-analise";
 
 /** ~3 horas de reunião. Acima disso, a transcrição deve ser dividida. */
@@ -126,21 +127,33 @@ export async function receberReuniao(entrada: EntradaReuniao): Promise<ReuniaoRe
   }.`;
 
   const instante = agora();
-  return criarReuniao({
-    status: "EM_PROCESSAMENTO",
-    origem: entrada.conteudo.nomeArquivo ? "arquivo_texto" : "texto",
-    nomeArquivo: entrada.conteudo.nomeArquivo,
-    contaId,
-    contaNome,
-    contexto,
-    transcricao,
-    etapas: ETAPAS.map(
-      (nome): Etapa =>
-        nome === "RECEBIMENTO"
-          ? { nome, status: "CONCLUIDA", iniciadaEm: instante, concluidaEm: instante, detalhe }
-          : { nome, status: "PENDENTE" },
-    ),
-  });
+  try {
+      return await criarReuniao({
+      status: "EM_PROCESSAMENTO",
+      origem: entrada.conteudo.nomeArquivo ? "arquivo_texto" : "texto",
+      nomeArquivo: entrada.conteudo.nomeArquivo,
+      contaId,
+      contaNome,
+      contexto,
+      transcricao,
+      etapas: ETAPAS.map(
+        (nome): Etapa =>
+          nome === "RECEBIMENTO"
+            ? { nome, status: "CONCLUIDA", iniciadaEm: instante, concluidaEm: instante, detalhe }
+            : { nome, status: "PENDENTE" },
+      ),
+    });
+  } catch (erro) {
+    if (!(erro instanceof ErroReuniaoDuplicada)) throw erro;
+    const { existente } = erro;
+    const situacao = existente.status === "EM_PROCESSAMENTO" ? "já está sendo analisada" : "já foi analisada e está no Dashboard";
+    const cliente = existente.nomeCliente ?? existente.contaNome;
+    throw new ErroEntrada(
+      "REUNIAO_DUPLICADA",
+      409,
+      `Esta reunião ${situacao} (${codigoReuniao(existente.numero)}${cliente ? ` · ${cliente}` : ""}). Envie uma reunião diferente.`,
+    );
+  }
 }
 
 /* ---------- Etapas 2 a 4 ---------- */
@@ -187,7 +200,11 @@ export async function processarReuniao(
       reuniaoId,
       "ANALISE_IA",
       `${
-        motor.nome === "claude" ? `Claude (${gerada.auditoria.modeloResposta})` : "Análise por regras locais"
+        motor.nome === "claude"
+          ? `Claude (${gerada.auditoria.modeloResposta})`
+          : motor.nome === "nemotron"
+            ? `Nemotron (${gerada.auditoria.modeloResposta})`
+            : "Análise por regras locais"
       }: ${gerada.analise.sinais.length} sinal(is) proposto(s).`,
     );
 

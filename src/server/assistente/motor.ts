@@ -28,6 +28,11 @@ export type EntradaMotor = {
   historico: MensagemConversa[];
   /** Empresas e reuniões em foco (já filtradas pela permissão do usuário). */
   foco: { contas: EntidadeConta[]; reunioes: EntidadeReuniao[] };
+  /**
+   * Empresa que o usuário fixou na tela ("Empresa em foco"), já validada. Modo empresa em foco: perguntas
+   * sem outra empresa se referem a ela.
+   */
+  empresaSelecionada?: EntidadeConta | null;
   ctx: ContextoConsulta;
   /** Compromisso selecionado na agenda, quando a conversa veio de "Preparar com o Dialys". */
   compromisso?: CompromissoEmFoco | null;
@@ -36,7 +41,7 @@ export type EntradaMotor = {
 };
 
 export type MotorAssistente = {
-  nome: "claude" | "demonstracao";
+  nome: "claude" | "nemotron" | "demonstracao";
   responder: (entrada: EntradaMotor) => Promise<{ texto: string }>;
 };
 

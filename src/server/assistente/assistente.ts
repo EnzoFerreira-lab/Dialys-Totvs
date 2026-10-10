@@ -12,12 +12,14 @@ import { dataNoFuso, horaNoFuso } from "@/lib/fuso";
 import { buscarCompromisso } from "../agenda/agenda";
 import { podeAcessarConta, type Usuario } from "../auth/usuarios";
 import { fusoHorario } from "../config/dados";
-import { temChaveClaude, traduzirErroAnalise, usarModoDemonstracao } from "../pipeline/motor-analise";
+import { ErroApiNemotron, temChaveNemotron } from "../ai/analisar-reuniao-nemotron";
+import { nomeMotorAtivo, traduzirErroAnalise } from "../pipeline/motor-analise";
 import { dataBr, executarFerramenta, resolverFoco, type ContextoConsulta, type EntidadeConta, type EntidadeReuniao } from "./ferramentas";
 import { ehPedidoDeBriefing, gerarBriefingDoUsuario } from "./briefing";
 import { ErroAssistente, type CompromissoEmFoco, type MotorAssistente } from "./motor";
 import { criarMotorClaude } from "./motor-claude";
 import { criarMotorDemonstracao } from "./motor-demonstracao";
+import { criarMotorNemotron } from "./motor-nemotron";
 
 export { ErroAssistente };
 
@@ -48,23 +50,26 @@ export type RespostaPergunta = {
   repetida: boolean;
 };
 
+/** Mesmo motor da análise de reuniões: Nemotron (gratuito), Claude só sem a chave dele, ou regras locais. */
 export function escolherMotorAssistente(): MotorAssistente {
-  if (usarModoDemonstracao()) return criarMotorDemonstracao();
-  if (!temChaveClaude()) {
+  const nome = nomeMotorAtivo();
+  if (nome === "demonstracao") return criarMotorDemonstracao();
+  if (nome === "claude") return criarMotorClaude();
+  if (!temChaveNemotron()) {
     throw new ErroAssistente(
       "CHAVE_NAO_CONFIGURADA",
       500,
-      "O assistente usa a API do Claude, que precisa de uma chave (ANTHROPIC_API_KEY).",
+      "O assistente usa o Nemotron gratuito via OpenRouter, que precisa de uma chave (OPENROUTER_API_KEY).",
       true,
     );
   }
-  return criarMotorClaude();
+  return criarMotorNemotron();
 }
 
 /** Erros do motor viram ErroAssistente com status e mensagem legíveis (mesma tradução da análise). */
 function traduzirErro(erro: unknown): ErroAssistente {
   if (erro instanceof ErroAssistente) return erro;
-  if (erro instanceof Anthropic.APIError || erro instanceof Anthropic.AnthropicError) {
+  if (erro instanceof ErroApiNemotron || erro instanceof Anthropic.APIError || erro instanceof Anthropic.AnthropicError) {
     const falha = traduzirErroAnalise(erro);
     return new ErroAssistente(falha.codigo, falha.httpStatus, `${falha.titulo}. ${falha.detalhe}`, falha.semChave);
   }
@@ -123,9 +128,10 @@ export async function responderPergunta(
 
   const ctx: ContextoConsulta = { usuario: pedido.usuario, agora: deps.agora ?? new Date() };
   const compromisso = pedido.compromissoEmFoco ? await compromissoDoUsuario(ctx, pedido.compromissoEmFoco) : null;
+  let empresaSelecionada: EntidadeConta | null = null;
   if (pedido.contaEmFoco) {
-    const [selecionada] = (await resolverFoco(ctx, [pedido.contaEmFoco], [])).contas;
-    if (!selecionada)
+    [empresaSelecionada = null] = (await resolverFoco(ctx, [pedido.contaEmFoco], [])).contas;
+    if (!empresaSelecionada)
       throw new ErroAssistente("CONTA_NAO_ENCONTRADA", 404, "A empresa selecionada não foi encontrada entre as suas contas.");
   }
   // O cliente do compromisso (se tiver reuniões analisadas) vem primeiro: "esse cliente" se refere a ele.
@@ -157,6 +163,7 @@ export async function responderPergunta(
         pergunta,
         historico: conversa?.mensagens ?? [],
         foco,
+        empresaSelecionada,
         ctx,
         compromisso,
         consultar: async (ferramenta, argumentos) => {

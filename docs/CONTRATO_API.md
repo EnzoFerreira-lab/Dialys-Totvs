@@ -245,7 +245,7 @@ Estado do pipeline e, quando concluída, o resultado. Enquanto o status for `EM_
 }
 ```
 
-`posicaoCaracterStart`/`End` são índices (base 0, fim exclusivo) na transcrição sanitizada. Com as regras locais (sem chave), `auditoria.modo` é `"demonstracao"` e tokens e custo ficam zerados.
+`posicaoCaracterStart`/`End` são índices (base 0, fim exclusivo) na transcrição sanitizada. `auditoria.modo` é `"nemotron"` (padrão, com `OPENROUTER_API_KEY`) ou `"claude"`; com as regras locais (sem chave), é `"demonstracao"` e tokens e custo ficam zerados.
 
 **Reunião que falhou** (`200`, porque a consulta em si deu certo):
 
@@ -452,7 +452,7 @@ Ação registrada: …",
 }
 ```
 
-- `modo`: `"claude"` (resposta da IA) ou `"demonstracao"` (montada pelas regras locais a partir do banco, sem IA: sem chave ou com `DIALYS_MODO_DEMO=true`); `null` no briefing.
+- `modo`: `"nemotron"` ou `"claude"` (resposta da IA) ou `"demonstracao"` (montada pelas regras locais a partir do banco, sem IA: sem chave ou com `DIALYS_MODO_DEMO=true`); `null` no briefing.
 - `tipo`: `"briefing"` quando a resposta é o briefing do dia (montado dos dados do usuário, sem IA); `null` nas demais. Só respostas `briefing` são lidas em voz pela tela.
 - `fala`: no briefing, o roteiro em frases `[{ texto, fala?, novoParagrafo? }]` para a síntese de voz (`fala`, quando presente, é a versão para ouvir); `null` nas demais.
 - `fontes`: empresas e reuniões que as consultas devolveram nesta resposta, não o que o texto afirma.

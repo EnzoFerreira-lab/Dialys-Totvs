@@ -6,7 +6,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as consultarReuniaoRota } from "@/app/api/v1/reunioes/[id]/route";
 import { DELETE as removerTranscricaoRota } from "@/app/api/v1/reunioes/[id]/transcricao/route";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { TRANSCRICAO_TESTE, transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { executarFerramenta } from "../assistente/ferramentas";
 import { COOKIE_SESSAO, criarTokenSessao } from "../auth/sessao";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
@@ -29,7 +29,7 @@ const removerRota = (id: string, usuario?: Usuario) =>
 
 const reuniao = (contaId: string, contaNome: string, data?: string) =>
   receberEProcessar(
-    { conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId, contaNome, ...(data ? { contexto: { data } } : {}) },
+    { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, ...(data ? { contexto: { data } } : {}) },
     { motor: motorFalso() },
   );
 
@@ -143,7 +143,7 @@ describe("remover transcrição (remoção lógica)", () => {
     // Nada apagado do banco: registro, número, texto e análise continuam lá.
     const banco = await lerBanco();
     const registro = banco.reuniao.find((r) => r.id === alvo)!;
-    expect(registro).toMatchObject({ numero: 2, transcricao: TRANSCRICAO_TESTE, transcricaoRemovida: { usuarioId: RICARDO.id } });
+    expect(registro).toMatchObject({ numero: 2, transcricao: expect.stringContaining(TRANSCRICAO_TESTE), transcricaoRemovida: { usuarioId: RICARDO.id } });
     expect(banco.sinal.some((s) => s.reuniaoId === alvo)).toBe(true);
 
     // Consultas ativas: a reunião some; a outra do mesmo cliente fica.
@@ -186,7 +186,7 @@ describe("remover transcrição (remoção lógica)", () => {
     // O restrito vê a conta-beta e pode remover a dela.
     expect((await removerRota(await idDe("2026-10-01 09:00:00"), RESTRITO)).status).toBe(200);
 
-    const emProcessamento = await receberReuniao({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, contaId: "conta-horizonte" });
+    const emProcessamento = await receberReuniao({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-horizonte" });
     const conflito = await removerRota(emProcessamento.id, RICARDO);
     expect(conflito.status).toBe(409);
     expect((await lerBanco()).reuniao.find((r) => r.id === emProcessamento.id)?.transcricaoRemovida).toBeUndefined();

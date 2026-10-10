@@ -385,12 +385,13 @@ export function FalhaAnaliseView({ falha }: { falha: FalhaAnalise }) {
         {falha.semChave ? (
           <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5">
             <li>
-              Gere uma chave em <span className="font-medium">console.anthropic.com</span> (menu API Keys) e adicione créditos em Billing.
+              Crie uma conta gratuita em <span className="font-medium">openrouter.ai</span> e gere uma chave no menu Keys. O modelo
+              Nemotron usado é gratuito: não precisa de créditos.
             </li>
             <li>
               Na raiz do projeto, crie o arquivo <code className="font-mono text-[12px]">.env.local</code> com a linha:
               <pre className="mt-1.5 overflow-x-auto rounded-[4px] bg-shell px-3 py-2 font-mono text-[12px] text-white">
-                ANTHROPIC_API_KEY=sua-chave-aqui
+                OPENROUTER_API_KEY=sua-chave-aqui
               </pre>
             </li>
             <li>

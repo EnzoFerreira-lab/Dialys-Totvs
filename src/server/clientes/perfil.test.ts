@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { dataNoFuso, paraInstante, somarDias } from "@/lib/fuso";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { criarCompromisso } from "../agenda/agenda";
 import { USUARIOS, type Usuario } from "../auth/usuarios";
 import { lerBanco } from "../db/banco";
@@ -20,7 +20,7 @@ const RESTRITO: Usuario = { id: "usr_teste_restrito_perfil", nome: "Vendedor", e
 const reuniao = (contaId: string, contaNome: string, data: string | null, nps?: number) =>
   receberEProcessar(
     {
-      conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE },
+      conteudo: { tipo: "texto", texto: transcricaoTeste() },
       contaId,
       contaNome,
       ...(data ? { contexto: { data, ...(nps !== undefined ? { nps } : {}) } } : {}),

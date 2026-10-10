@@ -4,7 +4,7 @@ import { chaveConta, type TipoSinal } from "@/lib/insights";
 import { extrairValorReais } from "@/lib/valores";
 import { serializarInsight, type Categoria } from "../api/http";
 import { lerOperacaoComercial } from "../config/operacao";
-import { usarModoDemonstracao } from "../pipeline/motor-analise";
+import { nomeMotorAtivo } from "../pipeline/motor-analise";
 import { listarAnalisesConcluidas, listarInsights, type InsightRegistro } from "../db/repositorio";
 import { listarContasInsight } from "./contas";
 
@@ -65,8 +65,8 @@ export async function montarResumo(agora = new Date(), podeVer: (contaId: string
 
   return {
     geradoEm: agora.toISOString(),
-    /** "demonstracao": análises simuladas por regras/cenários, sem chamar a IA (DIALYS_MODO_DEMO). */
-    modoAnalise: usarModoDemonstracao() ? ("demonstracao" as const) : ("claude" as const),
+    /** Motor das análises: "nemotron" (gratuito), "claude" ou "demonstracao" (regras locais, sem IA). */
+    modoAnalise: nomeMotorAtivo(),
     operacao: lerOperacaoComercial(),
     kpis: {
       reunioesAnalisadas: analises.length,

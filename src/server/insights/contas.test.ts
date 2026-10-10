@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FRASE_TESTE, TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { FRASE_TESTE, transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import type { SinalRegistro } from "../db/banco";
 import { ANALISE_FALSA, motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar, type EntradaReuniao } from "../pipeline/processar-reuniao";
@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 const analisar = (extra: Partial<EntradaReuniao> = {}, motor = motorFalso()) =>
-  receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, ...extra }, { motor });
+  receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, ...extra }, { motor });
 
 /** Motor que só devolve uma objeção (sem churn): para conferir a ordenação entre contas. */
 const soObjecao = motorFalso(async () => ({

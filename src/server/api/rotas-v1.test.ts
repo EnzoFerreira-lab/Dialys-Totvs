@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { ErroAnalise } from "../ai/analisar-reuniao";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 
@@ -48,7 +48,7 @@ afterEach(async () => {
 });
 
 /** Processa uma reunião no modo síncrono e devolve o corpo da resposta. */
-async function processarSincrono(corpo: unknown = { texto: TRANSCRICAO_TESTE, contaId: "c-001" }) {
+async function processarSincrono(corpo: unknown = { texto: transcricaoTeste(), contaId: "c-001" }) {
   const resposta = await processar(postJson(`${BASE}/reunioes/processar?modo=sincrono`, corpo));
   expect(resposta.status).toBe(201);
   return resposta.json();
@@ -56,7 +56,7 @@ async function processarSincrono(corpo: unknown = { texto: TRANSCRICAO_TESTE, co
 
 describe("POST /api/v1/reunioes/processar", () => {
   it("modo assíncrono: 202 com EM_PROCESSAMENTO, depois GET mostra o resultado", async () => {
-    const resposta = await processar(postJson(`${BASE}/reunioes/processar`, { texto: TRANSCRICAO_TESTE }));
+    const resposta = await processar(postJson(`${BASE}/reunioes/processar`, { texto: transcricaoTeste() }));
     expect(resposta.status).toBe(202);
     expect(resposta.headers.get("X-Request-Id")).toMatch(/^req_/);
     const aceita = await resposta.json();
@@ -81,7 +81,7 @@ describe("POST /api/v1/reunioes/processar", () => {
 
   it("aceita multipart com arquivo .txt", async () => {
     const form = new FormData();
-    form.set("arquivo", new File([TRANSCRICAO_TESTE], "reuniao.txt", { type: "text/plain" }));
+    form.set("arquivo", new File([transcricaoTeste()], "reuniao.txt", { type: "text/plain" }));
     const resposta = await processar(new Request(`${BASE}/reunioes/processar?modo=sincrono`, { method: "POST", body: form }));
     expect(resposta.status).toBe(201);
     expect(await resposta.json()).toMatchObject({ origem: "arquivo_texto", nomeArquivo: "reuniao.txt" });
@@ -90,7 +90,7 @@ describe("POST /api/v1/reunioes/processar", () => {
   it.each([
     ["JSON quebrado", new Request(`${BASE}/reunioes/processar`, { method: "POST", headers: { "content-type": "application/json" }, body: "{" }), 400, "JSON_INVALIDO"],
     ["texto curto", postJson(`${BASE}/reunioes/processar`, { texto: "oi" }), 400, "TRANSCRICAO_VAZIA"],
-    ["modo desconhecido", postJson(`${BASE}/reunioes/processar?modo=lento`, { texto: TRANSCRICAO_TESTE }), 400, "MODO_INVALIDO"],
+    ["modo desconhecido", postJson(`${BASE}/reunioes/processar?modo=lento`, { texto: transcricaoTeste() }), 400, "MODO_INVALIDO"],
     ["content-type errado", new Request(`${BASE}/reunioes/processar`, { method: "POST", body: "texto" }), 415, "TIPO_NAO_SUPORTADO"],
   ])("%s → %i %s", async (_caso, request, status, codigo) => {
     const resposta = await processar(request);
@@ -103,7 +103,7 @@ describe("POST /api/v1/reunioes/processar", () => {
       motorFalso(async () => {
         throw new ErroAnalise("recusa", "recusou");
       });
-    const resposta = await processar(postJson(`${BASE}/reunioes/processar?modo=sincrono`, { texto: TRANSCRICAO_TESTE }));
+    const resposta = await processar(postJson(`${BASE}/reunioes/processar?modo=sincrono`, { texto: transcricaoTeste() }));
     expect(resposta.status).toBe(422);
     const { erro } = await resposta.json();
     expect(erro.codigo).toBe("ANALISE_RECUSADA");
@@ -112,7 +112,7 @@ describe("POST /api/v1/reunioes/processar", () => {
 
   it("erro inesperado vira 500 no formato padrão", async () => {
     process.env.DIALYS_BANCO_ARQUIVO = pasta; // uma pasta no lugar do arquivo: a leitura do banco quebra
-    const resposta = await processar(postJson(`${BASE}/reunioes/processar`, { texto: TRANSCRICAO_TESTE }));
+    const resposta = await processar(postJson(`${BASE}/reunioes/processar`, { texto: transcricaoTeste() }));
     expect(resposta.status).toBe(500);
     expect((await resposta.json()).erro.codigo).toBe("ERRO_INTERNO");
   });
@@ -192,7 +192,7 @@ describe("POST /api/v1/crm/sincronizar", () => {
 
 describe("GET /api/v1/resumo", () => {
   it("devolve os KPIs, a matriz de urgência e a agenda a partir do banco", async () => {
-    await processarSincrono({ texto: TRANSCRICAO_TESTE, contaId: "conta-acme", contaNome: "Indústria Acme" });
+    await processarSincrono({ texto: transcricaoTeste(), contaId: "conta-acme", contaNome: "Indústria Acme" });
     const resposta = await resumo();
     expect(resposta.status).toBe(200);
     const corpo = await resposta.json();

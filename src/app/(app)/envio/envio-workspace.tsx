@@ -30,6 +30,7 @@ const TITULOS_ERRO: Record<string, string> = {
   CONTA_INVALIDA: "Conta inválida",
   SEM_CONEXAO: "Servidor indisponível",
   TEMPO_ESGOTADO: "Análise demorou demais",
+  REUNIAO_DUPLICADA: "Reunião já enviada",
 };
 
 const falha = (titulo: string, detalhe: string, semChave = false): FalhaAnalise => ({
@@ -49,6 +50,9 @@ export function EnvioWorkspace({ exemplos }: { exemplos: ExemploResumo[] }) {
   const router = useRouter();
   const avisar = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: "ocioso" });
+  // Trocar a key recria o compositor vazio. Com cacheComponents, o Next esconde a página ao navegar (<Activity>)
+  // em vez de desmontá-la: sem isso, ao voltar para o Envio a reunião já analisada continuaria no campo.
+  const [versaoComposer, setVersaoComposer] = useState(0);
   const resultadoRef = useRef<HTMLDivElement>(null);
   const cancelamento = useRef<AbortController | null>(null);
 
@@ -91,6 +95,9 @@ export function EnvioWorkspace({ exemplos }: { exemplos: ExemploResumo[] }) {
         descricao: `${total} ${total === 1 ? "sinal identificado" : "sinais identificados"} · ${final.conta.nome}.`,
       });
       router.push(comSinais ? `/dashboard?nova=${final.id}` : `/insights?reuniao=${encodeURIComponent(final.id)}`);
+      // Análise entregue: a tela volta limpa. Em falha, o texto fica no campo para tentar de novo.
+      setVersaoComposer((versao) => versao + 1);
+      setEstado({ fase: "ocioso" });
     } catch (erro) {
       if (controle.signal.aborted) return;
       const erroApi = erro instanceof ErroDaApi ? erro : new ErroDaApi(0, "ERRO", "Não foi possível concluir o envio.");
@@ -106,7 +113,12 @@ export function EnvioWorkspace({ exemplos }: { exemplos: ExemploResumo[] }) {
 
   return (
     <>
-      <EnvioComposer analisando={estado.fase === "processando" || estado.fase === "concluida"} onEnviar={enviar} exemplos={exemplos} />
+      <EnvioComposer
+        key={versaoComposer}
+        analisando={estado.fase === "processando" || estado.fase === "concluida"}
+        onEnviar={enviar}
+        exemplos={exemplos}
+      />
 
       <div ref={resultadoRef} className="scroll-mt-16">
         {estado.fase === "processando" ? (

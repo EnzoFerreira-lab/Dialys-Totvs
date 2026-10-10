@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { montarBriefing } from "@/lib/briefing";
-import { TRANSCRICAO_TESTE } from "../ai/__fixtures__/reuniao-teste";
+import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { ANALISE_FALSA, motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar, type EntradaReuniao } from "../pipeline/processar-reuniao";
 import { montarResumo } from "./resumo";
@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 const analisar = (extra: Partial<EntradaReuniao> = {}, motor = motorFalso()) =>
-  receberEProcessar({ conteudo: { tipo: "texto", texto: TRANSCRICAO_TESTE }, ...extra }, { motor });
+  receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, ...extra }, { motor });
 
 const soObjecao = motorFalso(async () => ({
   ...structuredClone(ANALISE_FALSA),
