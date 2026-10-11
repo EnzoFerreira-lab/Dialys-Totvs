@@ -14,7 +14,7 @@ const CorpoSchema = z.object({
   conversaId: z.string().regex(/^cnv_[0-9a-f]{32}$/).nullish(),
   idCliente: z.string().min(8).max(64).regex(/^[\w-]+$/).optional(),
   // Empresa selecionada na tela: tratada como qualquer id vindo do navegador (validada no serviço).
-  // compromissoId: "Preparar com o Dialys" na agenda; o serviço confere que o compromisso é do usuário.
+  // compromissoId: compromisso da agenda do usuário em foco (uso pela API); o serviço confere o dono.
   filtros: z
     .object({ contaId: z.string().min(1).max(80).nullish(), compromissoId: z.string().regex(/^cmp_[0-9a-f]{32}$/).nullish() })
     .optional(),

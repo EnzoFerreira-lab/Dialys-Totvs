@@ -107,7 +107,7 @@ export async function chamarChatNemotron(
 }
 
 /** Tira raciocínio (<think>) e cercas de código que alguns modelos devolvem em volta do JSON. */
-function extrairJson(conteudo: string) {
+export function extrairJsonDaResposta(conteudo: string) {
   const limpo = semRaciocinio(conteudo);
   const cercado = limpo.match(/```(?:json)?\s*([\s\S]*?)```/);
   const texto = cercado ? cercado[1] : limpo;
@@ -153,7 +153,7 @@ export async function gerarAnaliseNemotron(transcricaoTexto: string, opcoes: Opc
 
   let json: unknown;
   try {
-    json = JSON.parse(extrairJson(conteudo));
+    json = JSON.parse(extrairJsonDaResposta(conteudo));
   } catch {
     throw new ErroAnalise("saida_invalida", "A resposta do modelo não é um JSON válido.", conteudo.slice(0, 500));
   }

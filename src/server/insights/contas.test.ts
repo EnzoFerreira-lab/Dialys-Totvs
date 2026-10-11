@@ -70,9 +70,9 @@ describe("Central de Insights a partir das reuniões analisadas", () => {
     // Reassociada pelo /envio à mesma empresa do CODT: cai no mesmo grupo.
     await analisar({ contaId: "codt-TB5392", contaNome: "Cliente TB5392" });
     await analisar({ contexto: { idReuniao: "999001" } });
-    // Reunião da amostra enviada sem o código do cliente: o ID_MEETING recupera o código (TFBES6) e o
+    // Reunião da amostra enviada sem o código do cliente: o ID_MEETING recupera o código (TFEHER) e o
     // nome sai do CNAE + UF da amostra.
-    await analisar({ contexto: { idReuniao: "959985" } });
+    await analisar({ contexto: { idReuniao: "971122" } });
 
     const contas = await listarContasInsight();
     expect(contas.map((c) => [c.nome, c.totalReunioes])).toEqual(
@@ -80,15 +80,15 @@ describe("Central de Insights a partir das reuniões analisadas", () => {
         ["Indústria Acme", 2],
         ["Cliente TB5392", 2],
         ["Reunião #999001", 1],
-        ["Vinícola · RS (TFBES6)", 1],
+        ["Estaleiro · RS (TFEHER)", 1],
       ]),
     );
     expect(contas).toHaveLength(4);
     expect(contas.find((c) => c.nome === "Cliente TB5392")).toMatchObject({ segmento: "Varejo", nps: 8 });
-    expect(contas.find((c) => c.nome.startsWith("Vinícola"))?.id).toBe("codt-TFBES6");
+    expect(contas.find((c) => c.nome.startsWith("Estaleiro"))?.id).toBe("codt-TFEHER");
 
     // O /envio só oferece empresas com identidade própria (não a reunião avulsa).
-    expect((await listarContasParaEnvio()).map((c) => c.id)).toEqual(["codt-TB5392", "conta-acme", "codt-TFBES6"]);
+    expect((await listarContasParaEnvio()).map((c) => c.id)).toEqual(["codt-TB5392", "codt-TFEHER", "conta-acme"]);
   });
 
   it("ordena da mais crítica para a menos e mostra empresa sem sinais no fim", async () => {

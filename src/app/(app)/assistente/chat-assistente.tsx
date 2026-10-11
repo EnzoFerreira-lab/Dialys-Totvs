@@ -1,11 +1,11 @@
 "use client";
 
-import { Add, Building, Calendar, Close, Renew, Send, VolumeUp, WarningFilled } from "@carbon/icons-react";
+import { Add, Building, Close, Renew, Send, VolumeUp, WarningFilled } from "@carbon/icons-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
-import { api, ErroDaApi, type Compromisso, type MensagemAssistenteApi } from "@/lib/api-cliente";
+import { api, ErroDaApi, type MensagemAssistenteApi } from "@/lib/api-cliente";
 import { cn } from "@/lib/cn";
 import { BalaoBriefing } from "./balao-briefing";
 import { FontesMensagem } from "./fontes-mensagem";
@@ -42,12 +42,6 @@ const sugestoesDaEmpresa = (nome: string) => [
   "Qual ação devo priorizar com ela?",
   "Monte uma pauta para a próxima reunião com ela",
 ];
-
-/** Sugestão quando a conversa vem de "Preparar com o Dialys": só é enviada se o usuário clicar. */
-const PEDIDO_PREPARACAO = "Me ajude a preparar este compromisso.";
-
-/** Compromisso aberto por ?compromisso=: carregado da agenda do usuário (a API confere o dono). */
-type FocoCompromisso = { id: string; compromisso: Compromisso | null; erro: string | null };
 
 type Falha = { mensagem: string; sessao?: boolean; semChave?: boolean };
 
@@ -114,21 +108,12 @@ export function ChatAssistente() {
     setContaLida(contaParam);
     setContaFoco(contaParam ? { id: contaParam, nome: params.get("nome") ?? contaParam } : null);
   }
-  const [compromissoFoco, setCompromissoFoco] = useState<FocoCompromisso | null>(null);
-  // ?compromisso= muda sem recarregar a página (links da barra lateral): acompanha durante a renderização.
-  const compromissoParam = params.get("compromisso");
-  const [compromissoLido, setCompromissoLido] = useState<string | null>(null);
-  if (compromissoParam !== compromissoLido) {
-    setCompromissoLido(compromissoParam);
-    setCompromissoFoco(compromissoParam ? { id: compromissoParam, compromisso: null, erro: null } : null);
-  }
   const [conversaId, setConversaId] = useState<string | null>(null);
   const [itens, setItens] = useState<Item[]>([]);
   const [rascunho, setRascunho] = useState("");
   const [processando, setProcessando] = useState(false);
   // Só renderiza no navegador (useSearchParams dentro de Suspense): ler a sessão aqui é seguro.
-  // Vindo de "Preparar com o Dialys", começa uma conversa nova (contexto limpo, só o compromisso).
-  const [carregandoHistorico, setCarregandoHistorico] = useState(() => lerSessao() !== null && !params.get("compromisso"));
+  const [carregandoHistorico, setCarregandoHistorico] = useState(() => lerSessao() !== null);
   const [aviso, setAviso] = useState<Falha | null>(null);
   /** Id do briefing que acabou de chegar: começa a falar sozinho uma vez (só quando foi pedido agora). */
   const [falarAgora, setFalarAgora] = useState<string | null>(null);
@@ -141,7 +126,7 @@ export function ChatAssistente() {
   // Recupera a conversa da aba (o servidor confere se ela é do usuário da sessão).
   useEffect(() => {
     const salvo = lerSessao();
-    if (!salvo || params.get("compromisso")) return;
+    if (!salvo) return;
     let ativo = true;
     api
       .lerConversa(salvo)
@@ -160,30 +145,7 @@ export function ChatAssistente() {
       ativo = false;
     };
     // Só na montagem: a conversa salva é recuperada uma vez.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Carrega o compromisso em foco (título e cliente para o chip). Nada é enviado ao Dialys aqui.
-  const idCompromisso = compromissoFoco?.id ?? null;
-  useEffect(() => {
-    if (!idCompromisso) return;
-    let ativo = true;
-    api
-      .lerCompromisso(idCompromisso)
-      .then((compromisso) => ativo && setCompromissoFoco({ id: idCompromisso, compromisso, erro: null }))
-      .catch(
-        (erro) =>
-          ativo &&
-          setCompromissoFoco({
-            id: idCompromisso,
-            compromisso: null,
-            erro: erro instanceof ErroDaApi && erro.status === 404 ? "Compromisso não encontrado na sua agenda." : "Não foi possível carregar o compromisso.",
-          }),
-      );
-    return () => {
-      ativo = false;
-    };
-  }, [idCompromisso]);
 
   // Rola para a mensagem mais nova.
   useEffect(() => {
@@ -207,9 +169,7 @@ export function ChatAssistente() {
         mensagem: pergunta,
         conversaId,
         idCliente,
-        ...(contaFoco || compromissoFoco?.compromisso
-          ? { filtros: { ...(contaFoco ? { contaId: contaFoco.id } : {}), ...(compromissoFoco?.compromisso ? { compromissoId: compromissoFoco.id } : {}) } }
-          : {}),
+        ...(contaFoco ? { filtros: { contaId: contaFoco.id } } : {}),
         ...(acao ? { acao } : {}),
       });
       if (r.resposta.tipo === "briefing") setFalarAgora(r.resposta.id);
@@ -302,29 +262,6 @@ export function ChatAssistente() {
         </div>
       </div>
 
-      {compromissoFoco ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-5 py-2 text-[12px] sm:px-8">
-          <span className="text-shell-text-secondary">Compromisso em foco:</span>
-          {compromissoFoco.erro ? (
-            <span role="alert" className="text-[#FFB3B8]">
-              {compromissoFoco.erro}
-            </span>
-          ) : (
-            <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-interactive/15 py-0.5 pr-1 pl-2.5 text-white">
-              <Calendar size={12} aria-hidden="true" />
-              <span className="truncate">
-                {compromissoFoco.compromisso
-                  ? `${compromissoFoco.compromisso.titulo}${compromissoFoco.compromisso.cliente ? ` · ${compromissoFoco.compromisso.cliente.nome}` : " · interno"}`
-                  : "Carregando…"}
-              </span>
-              <button type="button" onClick={() => setCompromissoFoco(null)} aria-label="Remover compromisso em foco" className="rounded-full p-0.5 hover:bg-white/10">
-                <Close size={12} />
-              </button>
-            </span>
-          )}
-        </div>
-      ) : null}
-
       <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-5 py-2 text-[12px] sm:px-8">
         <span className="text-shell-text-secondary">Empresa em foco:</span>
         {contaFoco ? (
@@ -373,17 +310,6 @@ export function ChatAssistente() {
                 </>
               )}
             </p>
-            {compromissoFoco?.compromisso ? (
-              <button
-                type="button"
-                onClick={() => void enviar(PEDIDO_PREPARACAO)}
-                disabled={processando}
-                className="mt-4 inline-flex items-center gap-2 rounded-[6px] bg-interactive px-3 py-2 text-left text-[13px] font-medium text-on-interactive transition-colors hover:bg-interactive-hover"
-              >
-                <Calendar size={16} aria-hidden="true" />
-                Preparar “{compromissoFoco.compromisso.titulo}”
-              </button>
-            ) : null}
             <ul className="mt-4 flex flex-wrap gap-2" aria-label="Sugestões de perguntas">
               {(sugestoesEmpresa ? sugestoesEmpresa.map((texto): (typeof SUGESTOES)[number] => ({ texto })) : SUGESTOES).map((sugestao) => (
                 <li key={sugestao.texto}>

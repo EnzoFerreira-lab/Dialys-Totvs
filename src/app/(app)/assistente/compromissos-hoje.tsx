@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Calendar } from "@carbon/icons-react";
+import { Calendar } from "@carbon/icons-react";
 import Link from "next/link";
 import { ROTULO_STATUS } from "@/lib/agenda";
 import { linkCliente } from "@/lib/alertas";
@@ -41,16 +41,6 @@ export function CompromissosHoje({ agenda }: { agenda: ListaAgendaApi }) {
                   )}
                   {c.status !== "agendado" ? ` · ${ROTULO_STATUS[c.status]}` : ""}
                 </p>
-                {c.status === "agendado" ? (
-                  <Link
-                    href={`/assistente?${new URLSearchParams({ compromisso: c.id })}`}
-                    scroll={false}
-                    className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-text-primary underline-offset-[3px] hover:underline"
-                  >
-                    Preparar com o Dialys
-                    <ArrowRight size={12} aria-hidden="true" />
-                  </Link>
-                ) : null}
               </div>
             </li>
           ))}

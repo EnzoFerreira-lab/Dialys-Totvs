@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { extrairReunioes } from "@/lib/transcricao";
 import { TRANSCRICAO_TESTE } from "../__fixtures__/reuniao-teste";
 import { validarEvidencias } from "../validar-evidencia";
 import { analisarReuniaoDemo } from "./analisar-reuniao-demo";
@@ -49,58 +52,40 @@ describe("analisarReuniaoDemo (regras locais)", () => {
 });
 
 // Amostra real enviada pela TOTVS (reuniões anonimizadas, locutores sem papel, erros de transcrição).
-/** IDs da amostra original (amostra_reunioes.json). */
-const AMOSTRA_ORIGINAL = new Set([
-  "1082750",
-  "920847",
-  "959985",
-  "1070370",
-  "934377",
-  "1227164",
-  "1144435",
-  "1296669",
-  "1070373",
-  "1218774",
-  "1332586",
-  "967677",
-  "1394492",
-  "756129",
-  "1069924",
-  "747580",
-  "1282016",
-]);
+// O menu Exemplo (data/exemplos/totvs) ficou só com reuniões em que o Nemotron encontrou insights com
+// citação literal confirmada. Reuniões que saíram do menu, mas cobrem casos das regras locais, ficam em
+// __fixtures__/amostra-regras.json (mesmo formato, registros originais).
+const REGRESSAO = extrairReunioes(readFileSync(path.join(__dirname, "__fixtures__", "amostra-regras.json"), "utf8")) ?? [];
 
 describe("amostra TOTVS (data/exemplos/totvs)", () => {
   const reunioes = lerAmostraTotvs();
   const porId = (id: string) => {
-    const reuniao = reunioes.find((r) => r.id === id);
-    if (!reuniao) throw new Error(`reunião ${id} não está na amostra`);
+    const reuniao = [...reunioes, ...REGRESSAO].find((r) => r.id === id);
+    if (!reuniao) throw new Error(`reunião ${id} não está na amostra nem nas fixtures`);
     return { ...reuniao, analise: analisarPorRegras(reuniao.transcricao, reuniao.contexto) };
   };
 
   it("carrega as reuniões sem duplicatas e com metadados", () => {
-    // 16 da amostra original + 54 de clientes com reuniões recorrentes (amostra_clientes_recorrentes.json).
-    expect(reunioes.length).toBe(70);
+    // 36 reuniões de 15 empresas, todas com insights validados na análise com o Nemotron.
+    expect(reunioes.length).toBe(36);
     expect(new Set(reunioes.map((r) => r.transcricao)).size).toBe(reunioes.length);
-    expect(reunioes.find((r) => r.id === "920847")?.contexto).toMatchObject({ segmento: "Saúde", uf: "RS", nps: 7 });
+    expect(reunioes.every((r) => r.contexto.codigoCliente && r.contexto.data)).toBe(true);
+    expect(REGRESSAO.map((r) => r.id).sort()).toEqual(["1069924", "1144435", "1227164", "1282016", "747580", "920847", "959985"]);
+    expect(REGRESSAO.find((r) => r.id === "920847")?.contexto).toMatchObject({ segmento: "Saúde", uf: "RS", nps: 7 });
   });
 
-  it("clientes recorrentes: várias reuniões por empresa, cada uma com sinais e CNAE com nome", () => {
+  it("clientes recorrentes: a maioria das empresas tem várias reuniões, todas com CNAE com nome", () => {
     const porCliente = new Map<string, typeof reunioes>();
     for (const r of reunioes)
       porCliente.set(r.contexto.codigoCliente ?? "", [...(porCliente.get(r.contexto.codigoCliente ?? "") ?? []), r]);
-    const recorrentes = [...porCliente.entries()].filter(([codigo, lista]) => codigo && lista.length >= 2);
-    expect(recorrentes.length).toBeGreaterThanOrEqual(20);
-    for (const [, lista] of recorrentes) expect(lista.every((r) => atividadeCnae(r.contexto.cnae))).toBe(true);
-    // Toda reunião acrescentada gera ao menos um sinal (a amostra original tem reuniões sem sinal, como o kick-off).
-    const novas = reunioes.filter((r) => r.contexto.data && r.contexto.codigoCliente && !AMOSTRA_ORIGINAL.has(r.id));
-    expect(novas).toHaveLength(54);
-    for (const r of novas) expect(analisarPorRegras(r.transcricao, r.contexto).sinais.length).toBeGreaterThan(0);
+    expect(porCliente.size).toBe(15);
+    expect([...porCliente.values()].filter((lista) => lista.length >= 2).length).toBe(11);
+    for (const r of reunioes) expect(atividadeCnae(r.contexto.cnae)).toBeTruthy();
   });
 
   it("menu Exemplo: agrupado por empresa em ordem alfabética, reunião mais recente primeiro", () => {
     const exemplos = listarExemplos();
-    expect(exemplos).toHaveLength(70);
+    expect(exemplos).toHaveLength(36);
     const grupos = [...new Set(exemplos.map((e) => e.grupo))];
     const empresas = grupos.map((g) => g.replace(/ · \d+ reuni(ão|ões)$/, ""));
     // Com nome, em ordem alfabética; sem nome ("Cliente <código>"), no fim.
@@ -108,7 +93,6 @@ describe("amostra TOTVS (data/exemplos/totvs)", () => {
     const comNome = empresas.filter((e) => !semNome(e));
     expect(comNome).toEqual([...comNome].sort((a, b) => a.localeCompare(b, "pt-BR")));
     expect(empresas.slice(comNome.length).every(semNome)).toBe(true);
-    expect(empresas.at(-1)).toBe("Cliente 118588");
     // Cada empresa aparece num bloco só, e o rótulo traz o total de reuniões dela.
     for (const g of grupos) {
       const doGrupo = exemplos.filter((e) => e.grupo === g);
@@ -116,10 +100,10 @@ describe("amostra TOTVS (data/exemplos/totvs)", () => {
       const datas = doGrupo.map((e) => reunioes.find((r) => `totvs-${r.id}` === e.id)?.contexto.data ?? "");
       expect(datas).toEqual([...datas].sort().reverse());
     }
-    expect(grupos).toContain("Estaleiro · RS (TFEHER) · 4 reuniões");
+    expect(grupos).toContain("Estaleiro · RS (TFEHER) · 2 reuniões");
   });
 
-  it.each(reunioes.map((r) => [r.id, r] as const))("%s: no máximo 6 sinais, todos com citação literal", (_id, reuniao) => {
+  it.each([...reunioes, ...REGRESSAO].map((r) => [r.id, r] as const))("%s: no máximo 6 sinais, todos com citação literal", (_id, reuniao) => {
     const analise = analisarPorRegras(reuniao.transcricao, reuniao.contexto);
     expect(analise.sinais.length).toBeLessThanOrEqual(6);
     const { sinaisDescartados, sinaisValidos } = validarEvidencias(reuniao.transcricao, analise.sinais);

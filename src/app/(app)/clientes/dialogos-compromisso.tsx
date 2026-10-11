@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Calendar, Checkmark, Edit, Location, Renew, User } from "@carbon/icons-react";
+import { Calendar, Checkmark, Edit, Location, Renew, User } from "@carbon/icons-react";
 import Link from "next/link";
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/cn";
 import { dataNoFuso, horaNoFuso, paraInstante, rotuloDia, type DataCivil } from "@/lib/fuso";
 import { EVENTO_CARTEIRA_ALTERADA } from "@/lib/eventos";
 import { COR_STATUS, intervalo } from "./estilo-compromisso";
+import { SugestaoPauta } from "./pauta-sugerida";
 
 const BOTAO_SECUNDARIO =
   "inline-flex h-10 items-center gap-2 rounded-[4px] border border-[#8D8D8D] px-3 text-[13px] font-medium text-text-primary transition-colors hover:bg-[#F2F2F2] disabled:cursor-not-allowed disabled:opacity-50";
@@ -111,15 +112,6 @@ export function DetalheCompromisso({ compromisso, fuso, onFechar, onEditar, onAl
         <Edit size={16} aria-hidden="true" />
         Editar
       </button>
-      {c.status === "agendado" ? (
-        <Link
-          href={`/assistente?${new URLSearchParams({ compromisso: c.id })}`}
-          className="inline-flex h-10 items-center gap-2 rounded-[4px] bg-interactive px-4 text-[13px] font-medium text-on-interactive transition-colors hover:bg-interactive-hover"
-        >
-          Preparar com o Dialys
-          <ArrowRight size={16} aria-hidden="true" />
-        </Link>
-      ) : null}
     </>
   );
 
@@ -375,6 +367,24 @@ export function FormularioCompromisso({ aberto, fuso, onFechar, onSalvo }: Formu
             ))}
           </select>
         </Campo>
+        {campos.contaId ? (
+          <div className="sm:col-span-3">
+            {/* key: trocar o cliente descarta a pauta do anterior. */}
+            <SugestaoPauta
+              key={campos.contaId}
+              contaId={campos.contaId}
+              titulo={campos.titulo}
+              data={campos.data}
+              desabilitado={ocupado}
+              onUsar={(texto) => {
+                // Mantém o que o usuário já escreveu: a pauta entra antes, separada por uma linha.
+                const atual = campos.observacoes.trim();
+                const juntas = atual && !atual.startsWith("Pauta sugerida pelo Dialys") ? `${texto}\n\n${atual}` : texto;
+                setCampos({ ...campos, observacoes: juntas.slice(0, LIMITE_OBSERVACOES) });
+              }}
+            />
+          </div>
+        ) : null}
         <Campo id={`${id}-data`} rotulo="Data" erro={erros.data} obrigatorio>
           <input id={`${id}-data`} type="date" className={CAMPO} value={campos.data} onChange={alterar("data")} {...ariaErro("data")} />
         </Campo>

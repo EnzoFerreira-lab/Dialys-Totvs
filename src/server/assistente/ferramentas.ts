@@ -527,6 +527,7 @@ export const avaliarEmpresa = definir({
           subtipo: a.subtipo,
           criticidade: a.severidade,
           citacaoLiteral: cortar(a.citacao, 220),
+          recomendacaoRegistrada: a.recomendacao,
           reuniao: `${a.reuniao.codigo}, ${a.reuniao.data ? dataBr(a.reuniao.data) : "data não informada"}`,
         })),
         temasRecorrentes: [...temas.values()]

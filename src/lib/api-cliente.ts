@@ -4,11 +4,12 @@ import type { ErroApi, InsightApi, ListaInsightsApi, ReuniaoApi, SincronizacaoCr
 import type { ConversaApi, MensagemAssistenteApi, RespostaMensagemApi } from "@/server/api/assistente";
 import type { ResumoCarteira } from "@/server/insights/resumo";
 import type { ClienteResumo } from "@/server/clientes/clientes";
+import type { PautaSugerida } from "@/server/agenda/pauta";
 import type { AlteracaoCompromisso, Compromisso, ListaAgendaApi, NovoCompromisso } from "@/lib/agenda";
 
 export type ListaClientesApi = { dados: ClienteResumo[]; paginacao: { total: number; limite: number; offset: number } };
 
-export type { ClienteResumo, Compromisso, ListaAgendaApi };
+export type { ClienteResumo, Compromisso, ListaAgendaApi, PautaSugerida };
 export type { ConversaApi, InsightApi, ListaInsightsApi, MensagemAssistenteApi, RespostaMensagemApi, ReuniaoApi, ResumoCarteira, SincronizacaoCrmApi };
 
 export type PerguntaAssistente = {
@@ -79,6 +80,8 @@ export const api = {
   /** Compromissos de hoje no fuso configurado. */
   agendaDeHoje: () => chamar<ListaAgendaApi>("/api/v1/agenda"),
   lerCompromisso: (id: string) => chamar<Compromisso>(`/api/v1/agenda/${encodeURIComponent(id)}`),
+  /** Pauta sugerida pela IA para um compromisso com o cliente (não grava nada). */
+  sugerirPauta: (corpo: { contaId: string; titulo?: string; data?: string }) => chamar<PautaSugerida>("/api/v1/agenda/pauta", postJson(corpo)),
   criarCompromisso: (corpo: NovoCompromisso) => chamar<Compromisso>("/api/v1/agenda", postJson(corpo)),
   alterarCompromisso: (id: string, corpo: AlteracaoCompromisso) =>
     chamar<Compromisso>(`/api/v1/agenda/${encodeURIComponent(id)}`, { ...postJson(corpo), method: "PATCH" }),
