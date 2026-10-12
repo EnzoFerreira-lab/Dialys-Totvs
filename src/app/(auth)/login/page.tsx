@@ -2,6 +2,7 @@ import { Help } from "@carbon/icons-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
+import { LinkInformativo } from "@/components/ui/link-informativo";
 import { LoginForm } from "./login-form";
 import { NetworkGraphic } from "./network-graphic";
 
@@ -69,13 +70,13 @@ export default function LoginPage() {
       <section className="flex flex-1 flex-col bg-layer-01 px-6 py-8 sm:px-[38px] lg:min-h-dvh lg:py-[30px]">
         <header className="flex items-center justify-between">
           <p className="text-[10px] tracking-[0.14em] text-text-secondary uppercase">Portal corporativo</p>
-          <a
-            href="#"
+          <LinkInformativo
+            assunto="ajuda-login"
             className="flex items-center gap-2 text-[11px] text-text-primary hover:text-text-secondary"
           >
             Precisa de ajuda?
             <Help size={16} aria-hidden="true" />
-          </a>
+          </LinkInformativo>
         </header>
 
         <div className="flex flex-1 items-center justify-center py-12">
@@ -87,9 +88,9 @@ export default function LoginPage() {
 
         <footer className="text-center text-[10px] leading-[1.9] text-text-secondary">
           <p>TOTVS S.A. © 2026. Todos os direitos reservados.</p>
-          <a href="#" className="text-text-primary hover:underline">
+          <LinkInformativo assunto="privacidade" className="text-text-primary hover:underline">
             Privacidade e segurança
-          </a>
+          </LinkInformativo>
         </footer>
       </section>
     </main>

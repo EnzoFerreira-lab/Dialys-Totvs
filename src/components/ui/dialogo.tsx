@@ -45,7 +45,7 @@ export function Dialogo({ aberto, titulo, rotulo, children, rodape, ocupado = fa
         if (evento.target === evento.currentTarget && !ocupado) onFechar();
       }}
       className={cn(
-        "m-auto max-h-[calc(100dvh-2rem)] bg-layer-01 p-0 text-text-primary shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop:bg-[rgba(22,22,22,0.5)] print:hidden",
+        "m-auto max-h-[calc(100dvh-2rem)] bg-layer-01 p-0 text-left text-[14px] leading-normal font-normal normal-case tracking-normal text-text-primary shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop:bg-[rgba(22,22,22,0.5)] print:hidden",
         largura === "grande" ? "w-[min(640px,calc(100vw-2rem))]" : "w-[min(520px,calc(100vw-2rem))]",
       )}
     >

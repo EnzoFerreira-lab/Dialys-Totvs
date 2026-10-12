@@ -1,4 +1,5 @@
 import { Help } from "@carbon/icons-react";
+import { LinkInformativo } from "@/components/ui/link-informativo";
 
 export function AppFooter() {
   return (
@@ -9,10 +10,13 @@ export function AppFooter() {
         </p>
         <div className="flex items-center gap-6">
           <p>TOTVS S.A. © 2026. Todos os direitos reservados.</p>
-          <a href="#" className="flex items-center gap-1.5 text-text-primary hover:text-text-secondary">
+          <LinkInformativo assunto="privacidade" className="text-text-primary hover:text-text-secondary">
+            Privacidade
+          </LinkInformativo>
+          <LinkInformativo assunto="ajuda" className="flex items-center gap-1.5 text-text-primary hover:text-text-secondary">
             Ajuda
             <Help size={14} aria-hidden="true" />
-          </a>
+          </LinkInformativo>
         </div>
       </div>
     </footer>

@@ -52,8 +52,6 @@ export function escolherMotor(opcoes: { atrasoDemoMs?: number } = {}): MotorAnal
     nome: "claude",
     gerar: (transcricao) => {
       if (!temChaveClaude()) throw new ErroSemChave();
-      // TODO(T02): exigir usuário autenticado antes de publicar. Sem isso qualquer visitante da URL
-      // dispara análises (e gasta créditos da API).
       return gerarAnalise(transcricao);
     },
   };
