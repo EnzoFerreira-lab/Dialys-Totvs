@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  // `npm run dev` aberto pelo IP da rede local (o endereço "Network", ex.: celular ou outro computador na
+  // apresentação): sem isto o Next bloqueia os arquivos de desenvolvimento e a página fica sem interação.
+  // 26.*: Radmin VPN, que o Next às vezes mostra como "Network" no lugar do IP da rede.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*", "26.*.*.*", "*.local"],
   partialPrefetching: true,
   // O assistente se chamava "Jarvis": links antigos continuam funcionando.
   redirects() {
