@@ -1,8 +1,8 @@
 // Recuperação de senha do piloto: SIMULADA. O fluxo é o de um sistema real (código de 6 dígitos com
 // validade, limite de tentativas, espera para reenviar, token de uso único para trocar a senha e
 // resposta que não revela se o e-mail existe), mas nenhum e-mail sai da máquina: o código volta para a
-// tela, que mostra uma prévia identificada como "e-mail simulado". A senha nova não é guardada, porque
-// o piloto ainda não verifica senhas (T02 liga o IdP corporativo, que passa a cuidar disso).
+// tela, que mostra uma prévia identificada como "e-mail simulado". A senha nova é gravada pela ação da tela
+// (definirSenha, em cadastro.ts), só depois de o código ser conferido.
 // Na produção: enviar o código por um serviço de e-mail e nunca devolvê-lo na resposta.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 
@@ -46,7 +46,7 @@ export type RespostaCodigo =
 
 /**
  * Gera um código de 6 dígitos para o e-mail. Qualquer e-mail válido recebe a mesma resposta (não
- * revela se existe uma conta), como no login do piloto, que aceita qualquer credencial.
+ * revela se existe uma conta); trocar a senha de um e-mail sem conta não cria nada.
  */
 export function solicitarCodigo(emailBruto: string, agora = Date.now()): RespostaCodigo {
   const email = normalizarEmail(emailBruto);
@@ -111,7 +111,7 @@ export function problemaNaSenha(senha: string): string | null {
 
 export type RespostaRedefinicao = { ok: true; email: string } | { ok: false; erro: string; campo?: "senha" | "confirmacao"; reiniciar?: boolean };
 
-/** Troca a senha com o token do código conferido (uso único). No piloto, nada é gravado. */
+/** Confere o token do código (uso único) e a senha nova. Quem grava é definirSenha (cadastro.ts). */
 export function redefinirSenha(token: string, senha: string, confirmacao: string, agora = Date.now()): RespostaRedefinicao {
   const redefinicao = estado().redefinicoes.get(token);
   if (!redefinicao || agora > redefinicao.expiraEm) {
@@ -122,6 +122,6 @@ export function redefinirSenha(token: string, senha: string, confirmacao: string
   if (problema) return { ok: false, erro: problema, campo: "senha" };
   if (senha !== confirmacao) return { ok: false, erro: "As senhas não são iguais.", campo: "confirmacao" };
   estado().redefinicoes.delete(token);
-  console.info(`[dialys/auth] senha redefinida (simulação) para ${mascararEmail(redefinicao.email)}`);
+  console.info(`[dialys/auth] senha redefinida para ${mascararEmail(redefinicao.email)}`);
   return { ok: true, email: redefinicao.email };
 }

@@ -8,6 +8,7 @@ import type { ResultadoAnalise } from "../ai/analisar-reuniao";
 import type { MencaoProduto } from "../ai/schemas";
 import type { SinalValidado } from "../ai/validar-evidencia";
 import { chaveConta } from "@/lib/insights";
+import { ID_USUARIO_DEMONSTRACAO } from "../auth/usuarios";
 import { completarCodigoCliente } from "../clientes/identificacao";
 import { criarArmazenamentoJson } from "./arquivo-json";
 
@@ -36,11 +37,16 @@ export type FalhaRegistrada = {
 export type ReuniaoRegistro = {
   id: string;
   /**
-   * Número sequencial da reunião, exibido como "Reunião 001". Único no sistema e nunca reutilizado:
-   * vem de `sequencias.reuniao`, que só cresce. Reuniões gravadas antes do campo existir recebem o
-   * número na leitura, pela ordem de criação (migração não destrutiva, gravada na próxima escrita).
+   * Número sequencial da reunião, exibido como "Reunião 001". Único entre as reuniões do dono e nunca
+   * reutilizado: vem da sequência dele (ver proximoNumeroReuniao), que só cresce. Reuniões gravadas antes do
+   * campo existir recebem o número na leitura, pela ordem de criação (migração não destrutiva).
    */
   numero: number;
+  /**
+   * Dono: o usuário que enviou a reunião. Cada usuário só vê as próprias reuniões e o que derivou delas.
+   * Reuniões de antes do campo existir são da persona de demonstração (migração na leitura).
+   */
+  usuarioId: string;
   criadaEm: string;
   atualizadaEm: string;
   status: StatusReuniao;
@@ -170,8 +176,11 @@ export type Banco = {
   compromisso: CompromissoRegistro[];
   /** Clientes retirados da carteira de cada usuário (fonte "real"). */
   carteira_remocao: CarteiraRemocaoRegistro[];
-  /** Último número emitido por sequência. Nunca diminui, então números removidos não voltam. */
-  sequencias: { reuniao: number };
+  /**
+   * Último número emitido por sequência. Nunca diminui, então números removidos não voltam. `reuniao` é a
+   * da persona de demonstração (dona das reuniões antigas); `porUsuario`, a de cada usuário cadastrado.
+   */
+  sequencias: { reuniao: number; porUsuario?: Record<string, number> };
 };
 
 const bancoVazio = (): Banco => ({
@@ -192,19 +201,23 @@ const bancoVazio = (): Banco => ({
  * número já emitido. Determinística: a leitura e a próxima escrita chegam aos mesmos números.
  */
 export function numerarReunioes(banco: Banco) {
-  banco.sequencias = { reuniao: banco.sequencias?.reuniao ?? 0 };
-  let ultimo = Math.max(banco.sequencias.reuniao, 0, ...banco.reuniao.map((r) => (Number.isInteger(r.numero) ? r.numero : 0)));
-  const semNumero = banco.reuniao
+  banco.sequencias = { ...banco.sequencias, reuniao: banco.sequencias?.reuniao ?? 0 };
+  // Só existem reuniões sem número de antes de cada reunião ter dono: todas da persona de demonstração.
+  const antigas = banco.reuniao.filter((r) => (r.usuarioId ?? ID_USUARIO_DEMONSTRACAO) === ID_USUARIO_DEMONSTRACAO);
+  let ultimo = Math.max(banco.sequencias.reuniao, 0, ...antigas.map((r) => (Number.isInteger(r.numero) ? r.numero : 0)));
+  const semNumero = antigas
     .filter((r) => !Number.isInteger(r.numero) || r.numero <= 0)
     .sort((a, b) => a.criadaEm.localeCompare(b.criadaEm) || a.id.localeCompare(b.id));
   for (const reuniao of semNumero) reuniao.numero = ++ultimo;
   banco.sequencias.reuniao = ultimo;
 }
 
-/** Próximo número de reunião (dentro de uma transação). */
-export function proximoNumeroReuniao(banco: Banco) {
+/** Próximo número de reunião do usuário (dentro de uma transação). Cada usuário tem a própria sequência. */
+export function proximoNumeroReuniao(banco: Banco, usuarioId: string) {
   numerarReunioes(banco);
-  return ++banco.sequencias.reuniao;
+  if (usuarioId === ID_USUARIO_DEMONSTRACAO) return ++banco.sequencias.reuniao;
+  const porUsuario = (banco.sequencias.porUsuario ??= {});
+  return (porUsuario[usuarioId] = (porUsuario[usuarioId] ?? 0) + 1);
 }
 
 /** DIALYS_BANCO_ARQUIVO troca o arquivo (os testes usam uma pasta temporária). */
@@ -250,8 +263,9 @@ export function converterRemocoesAntigas(banco: Banco) {
   banco.carteira_remocao = [];
 }
 
-/** Migrações na leitura: numeração, código do cliente das reuniões da amostra e remoções antigas. */
+/** Migrações na leitura: dono, numeração, código do cliente das reuniões da amostra e remoções antigas. */
 function migrarBanco(banco: Banco) {
+  for (const reuniao of banco.reuniao) reuniao.usuarioId ??= ID_USUARIO_DEMONSTRACAO;
   numerarReunioes(banco);
   completarCodigoCliente(banco.reuniao);
   converterRemocoesAntigas(banco);

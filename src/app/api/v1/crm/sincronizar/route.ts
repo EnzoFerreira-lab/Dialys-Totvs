@@ -3,7 +3,9 @@
 // sem reenviar o webhook.
 import { z } from "zod";
 import { enviarWebhookCrm, montarPayloadCrm, type PayloadCrm } from "@/server/api/crm";
+import { SEM_SESSAO } from "@/server/api/agenda";
 import { comTratamento, erro, json, type SincronizacaoCrmApi } from "@/server/api/http";
+import { usuarioDaRequisicao } from "@/server/auth/sessao";
 import { buscarInsight, registrarSincronizacao } from "@/server/db/repositorio";
 
 const CorpoSchema = z.object({
@@ -12,6 +14,8 @@ const CorpoSchema = z.object({
 
 export async function POST(request: Request) {
   return comTratamento("POST /crm/sincronizar", async (requestId) => {
+    const usuario = await usuarioDaRequisicao(request);
+    if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
       return erro(415, "TIPO_NAO_SUPORTADO", "Use Content-Type application/json.", requestId);
     }
@@ -27,7 +31,7 @@ export async function POST(request: Request) {
       return erro(400, "INSIGHT_ID_INVALIDO", `Campo "insightId" inválido: ${problema?.message}.`, requestId);
     }
 
-    const insight = await buscarInsight(lido.data.insightId);
+    const insight = await buscarInsight(usuario.id, lido.data.insightId);
     if (!insight) return erro(404, "INSIGHT_NAO_ENCONTRADO", `Insight ${lido.data.insightId} não encontrado.`, requestId);
 
     const { registro, novo } = await registrarSincronizacao(insight.sinal.id, (protocolo) => montarPayloadCrm(insight, protocolo));

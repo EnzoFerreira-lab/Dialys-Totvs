@@ -24,8 +24,12 @@ beforeEach(async () => {
   pasta = await mkdtemp(path.join(tmpdir(), "dialys-foco-"));
   process.env.DIALYS_BANCO_ARQUIVO = path.join(pasta, "banco.json");
   const motor = motorFalso();
-  const reuniao = (contaId: string, contaNome: string, data: string) =>
-    receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data } }, { motor });
+  // As mesmas reuniões para o Ricardo e para o restrito: cada usuário só consulta as próprias.
+  const reuniao = async (contaId: string, contaNome: string, data: string) => {
+    for (const dono of [RICARDO.id, RESTRITO.id]) {
+      await receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data } }, { motor }, dono);
+    }
+  };
   // Duas reuniões do mesmo cliente: dá para ver evolução e temas recorrentes.
   await reuniao("conta-grupo-horizonte", "Grupo Horizonte", "2026-09-10 10:00:00");
   await reuniao("conta-grupo-horizonte", "Grupo Horizonte", "2026-10-03 10:00:00");

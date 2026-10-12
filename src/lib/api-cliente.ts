@@ -43,6 +43,12 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<T> {
   const corpo: unknown = await resposta.json().catch(() => null);
   if (!resposta.ok) {
     const erro = (corpo as ErroApi | null)?.erro;
+    // Sessão vencida (ou conta removida) no meio do uso: volta ao login e, depois de entrar, a esta tela.
+    if (resposta.status === 401 && erro?.codigo === "SESSAO_AUSENTE" && typeof window !== "undefined") {
+      // Fora de um componente (sem router) e de propósito com recarga: nada da sessão anterior fica na tela.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign(`/login?${new URLSearchParams({ volta: `${window.location.pathname}${window.location.search}` })}`);
+    }
     throw new ErroDaApi(resposta.status, erro?.codigo ?? "ERRO_HTTP", erro?.mensagem ?? `Erro ${resposta.status} na API.`, erro?.detalhe);
   }
   return corpo as T;

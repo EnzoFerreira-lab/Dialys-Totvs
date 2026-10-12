@@ -46,7 +46,7 @@ export type ResultadoFerramenta = {
 const semEntidades = () => ({ contas: [], reunioes: [] });
 
 function dadosPermitidos(ctx: ContextoConsulta): Promise<DadosPermitidos> {
-  ctx.dados ??= Promise.all([listarContasInsight(), listarAnalisesConcluidas()]).then(([contas, analises]) => ({
+  ctx.dados ??= Promise.all([listarContasInsight(ctx.usuario.id), listarAnalisesConcluidas(ctx.usuario.id)]).then(([contas, analises]) => ({
     contas: contas.filter((conta) => podeAcessarConta(ctx.usuario, conta.id)),
     analises: analises.filter((a) => podeAcessarConta(ctx.usuario, chaveConta(a.reuniao))),
   }));

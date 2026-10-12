@@ -50,11 +50,15 @@ function escolherRiscoDestacado(insights: InsightRegistro[]) {
 }
 
 /**
- * `podeVer`: filtro de escopo do usuário (o briefing do assistente passa a permissão dele); sem filtro,
- * a carteira inteira (rota /api/v1/resumo do piloto).
+ * Carteira do usuário `usuarioId` (só as reuniões dele). `podeVer`: escopo dele dentro dessa carteira
+ * (podeAcessarConta); sem filtro, todas as contas dele.
  */
-export async function montarResumo(agora = new Date(), podeVer: (contaId: string) => boolean = () => true) {
-  const [todasAnalises, todasContas, todosInsights] = await Promise.all([listarAnalisesConcluidas(), listarContasInsight(), listarInsights()]);
+export async function montarResumo(usuarioId: string, agora = new Date(), podeVer: (contaId: string) => boolean = () => true) {
+  const [todasAnalises, todasContas, todosInsights] = await Promise.all([
+    listarAnalisesConcluidas(usuarioId),
+    listarContasInsight(usuarioId),
+    listarInsights(usuarioId),
+  ]);
   const analises = todasAnalises.filter((a) => podeVer(chaveConta(a.reuniao)));
   const contas = todasContas.filter((c) => podeVer(c.id));
   const insights = todosInsights.filter((i) => podeVer(chaveConta(i.reuniao)));

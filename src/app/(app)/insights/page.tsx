@@ -73,7 +73,7 @@ async function InsightsDasReunioes({ searchParams }: { searchParams: ParametrosB
   const usuario = await usuarioDaSessao();
   if (!usuario) redirect("/login?volta=/insights");
   const { conta } = await searchParams;
-  const reunioes = await listarReunioesCentral((contaId) => podeAcessarConta(usuario, contaId));
+  const reunioes = await listarReunioesCentral(usuario.id, (contaId) => podeAcessarConta(usuario, contaId));
   if (typeof conta === "string" && conta && !reunioes.some((r) => r.conta.id === conta)) {
     const cliente = await buscarClienteNoCadastro(usuario, conta);
     if (cliente) return <ClienteSemAnalise nome={cliente.nome} segmento={cliente.segmento} />;

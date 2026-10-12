@@ -23,6 +23,15 @@ vi.mock("../pipeline/motor-analise", async (original) => {
   return { ...modulo, escolherMotor: () => (motor.atual ? motor.atual() : modulo.escolherMotor()) };
 });
 
+// Sessão: aqui o foco é o contrato das rotas; todas as chamadas são do Ricardo, menos as marcadas com
+// x-teste-sem-sessao. A assinatura do cookie e a separação entre usuários têm testes próprios
+// (rotas-assistente.test.ts e isolamento-usuarios.test.ts).
+vi.mock("../auth/sessao", async (original) => {
+  const modulo = await original<typeof import("../auth/sessao")>();
+  const { USUARIOS } = await import("../auth/usuarios");
+  return { ...modulo, usuarioDaRequisicao: async (request: Request) => (request.headers.get("x-teste-sem-sessao") ? null : USUARIOS[0]) };
+});
+
 const { POST: processar } = await import("@/app/api/v1/reunioes/processar/route");
 const { GET: consultar } = await import("@/app/api/v1/reunioes/[id]/route");
 const { GET: insights } = await import("@/app/api/v1/insights/route");
@@ -193,11 +202,26 @@ describe("POST /api/v1/crm/sincronizar", () => {
 describe("GET /api/v1/resumo", () => {
   it("devolve os KPIs, a matriz de urgência e a agenda a partir do banco", async () => {
     await processarSincrono({ texto: transcricaoTeste(), contaId: "conta-acme", contaNome: "Indústria Acme" });
-    const resposta = await resumo();
+    const resposta = await resumo(new Request(`${BASE}/resumo`));
     expect(resposta.status).toBe(200);
     const corpo = await resposta.json();
     expect(corpo.kpis).toMatchObject({ reunioesAnalisadas: 1, contasEmRiscoChurn: 1, sinais: { churn: 1, upsell: 1, objection: 0 } });
     expect(corpo.urgencias[0]).toMatchObject({ categoria: "churn", conta: { id: "conta-acme", nome: "Indústria Acme" } });
     expect(corpo.agenda).toHaveLength(1);
+  });
+});
+
+describe("sessão", () => {
+  it("sem sessão, as rotas de dados respondem 401", async () => {
+    const semSessao = { "x-teste-sem-sessao": "1" };
+    const id = `reu_${"a".repeat(32)}`;
+    const respostas = await Promise.all([
+      processar(new Request(`${BASE}/reunioes/processar`, { method: "POST", headers: { ...semSessao, "content-type": "application/json" }, body: "{}" })),
+      consultar(new Request(`${BASE}/reunioes/${id}`, { headers: semSessao }), { params: Promise.resolve({ id }) }),
+      insights(new NextRequest(`${BASE}/insights`, { headers: semSessao })),
+      sincronizar(new Request(`${BASE}/crm/sincronizar`, { method: "POST", headers: { ...semSessao, "content-type": "application/json" }, body: "{}" })),
+      resumo(new Request(`${BASE}/resumo`, { headers: semSessao })),
+    ]);
+    expect(respostas.map((r) => r.status)).toEqual([401, 401, 401, 401, 401]);
   });
 });

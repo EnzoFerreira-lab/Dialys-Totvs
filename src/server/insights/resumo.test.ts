@@ -7,6 +7,7 @@ import { transcricaoTeste } from "../ai/__fixtures__/reuniao-teste";
 import { ANALISE_FALSA, motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar, type EntradaReuniao } from "../pipeline/processar-reuniao";
 import { montarResumo } from "./resumo";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 let pasta: string;
 beforeEach(async () => {
@@ -31,7 +32,7 @@ const soObjecao = motorFalso(async () => ({
 
 describe("montarResumo (GET /api/v1/resumo)", () => {
   it("carteira vazia: tudo zerado e briefing pedindo o primeiro envio", async () => {
-    const resumo = await montarResumo();
+    const resumo = await montarResumo(DEMO);
     expect(resumo.kpis).toMatchObject({ reunioesAnalisadas: 0, contasAnalisadas: 0, contasEmRiscoChurn: 0, npsMedio: null });
     expect(resumo.urgencias).toEqual([]);
     expect(resumo.agenda).toEqual([]);
@@ -45,7 +46,7 @@ describe("montarResumo (GET /api/v1/resumo)", () => {
     await analisar({ contaId: "conta-acme", contaNome: "Indústria Acme", contexto: { nps: 6 } });
     await analisar({ contaId: "conta-beta", contaNome: "Beta Ltda", contexto: { nps: 9 } }, soObjecao);
 
-    const resumo = await montarResumo();
+    const resumo = await montarResumo(DEMO);
     expect(resumo.kpis).toEqual({
       reunioesAnalisadas: 2,
       reunioesUltimos7Dias: 2,

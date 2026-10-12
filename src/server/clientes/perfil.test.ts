@@ -17,16 +17,21 @@ const FUSO = "America/Sao_Paulo";
 const RICARDO = USUARIOS[0];
 const RESTRITO: Usuario = { id: "usr_teste_restrito_perfil", nome: "Vendedor", email: "v@t.br", papel: "vendedor", escopo: { tipo: "contas", contaIds: ["conta-beta"] } };
 
-const reuniao = (contaId: string, contaNome: string, data: string | null, nps?: number) =>
-  receberEProcessar(
-    {
-      conteudo: { tipo: "texto", texto: transcricaoTeste() },
-      contaId,
-      contaNome,
-      ...(data ? { contexto: { data, ...(nps !== undefined ? { nps } : {}) } } : {}),
-    },
-    { motor: motorFalso() },
-  );
+/** A mesma reunião para o Ricardo e para o restrito: cada usuário só vê as próprias. */
+const reuniao = async (contaId: string, contaNome: string, data: string | null, nps?: number) => {
+  for (const dono of [RICARDO.id, RESTRITO.id]) {
+    await receberEProcessar(
+      {
+        conteudo: { tipo: "texto", texto: transcricaoTeste() },
+        contaId,
+        contaNome,
+        ...(data ? { contexto: { data, ...(nps !== undefined ? { nps } : {}) } } : {}),
+      },
+      { motor: motorFalso() },
+      dono,
+    );
+  }
+};
 const amanha = (hora: string) => paraInstante(somarDias(dataNoFuso(new Date(), FUSO), 1), hora, FUSO).toISOString();
 
 let pasta: string;

@@ -4,6 +4,7 @@
 //   contaId, reuniaoId                                filtros exatos
 //   limite (1–200, padrão 50), offset (padrão 0)      paginação
 import type { NextRequest } from "next/server";
+import { SEM_SESSAO } from "@/server/api/agenda";
 import type { Severidade, TipoSinal } from "@/server/ai/schemas";
 import {
   CATEGORIAS,
@@ -15,6 +16,7 @@ import {
   serializarInsight,
   type ListaInsightsApi,
 } from "@/server/api/http";
+import { usuarioDaRequisicao } from "@/server/auth/sessao";
 import { listarInsights } from "@/server/db/repositorio";
 
 const CRITICIDADES: Record<string, Severidade> = { ALTA: "ALTA", MÉDIA: "MÉDIA", MEDIA: "MÉDIA", BAIXA: "BAIXA" };
@@ -38,6 +40,8 @@ function inteiro(valor: string | null, padrao: number, min: number, max: number)
 
 export async function GET(request: NextRequest) {
   return comTratamento("GET /insights", async (requestId) => {
+    const usuario = await usuarioDaRequisicao(request);
+    if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const params = request.nextUrl.searchParams;
 
     const categoriasLidas = lista(params, "categoria").map((c) => c.toLowerCase());
@@ -63,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     const tipos: TipoSinal[] = [...new Set(categorias.map((c) => CATEGORIAS[c]))];
     const severidades: Severidade[] = [...new Set(criticidades.map((c) => CRITICIDADES[c]))];
-    const insights = await listarInsights({
+    const insights = await listarInsights(usuario.id, {
       tipos,
       severidades,
       contaId: params.get("contaId") || undefined,

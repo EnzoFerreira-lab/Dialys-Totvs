@@ -16,7 +16,7 @@ const DATA = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 export async function GET(request: Request) {
   await connection();
   return comTratamento("GET /agenda", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const fuso = fusoHorario();
     const hoje = dataNoFuso(new Date(), fuso);
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return comTratamento("POST /agenda", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const lido = await lerCorpoJson(request, requestId);
     if ("resposta" in lido) return lido.resposta;

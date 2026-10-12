@@ -17,7 +17,7 @@ function inteiro(valor: string | null, padrao: number, min: number, max: number)
 export async function GET(request: Request) {
   await connection();
   return comTratamento("GET /clientes", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const params = new URL(request.url).searchParams;
     const limite = inteiro(params.get("limite"), LIMITE_CLIENTES, 1, 50);

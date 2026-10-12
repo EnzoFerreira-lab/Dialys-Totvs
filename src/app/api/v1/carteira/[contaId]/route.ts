@@ -24,7 +24,7 @@ async function contaIdValido(params: Contexto["params"]) {
 
 export async function DELETE(request: Request, { params }: Contexto) {
   return comTratamento("DELETE /carteira/{contaId}", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const contaId = await contaIdValido(params);
     if (!contaId) return erro(400, "ID_INVALIDO", "Id de cliente inválido.", requestId);

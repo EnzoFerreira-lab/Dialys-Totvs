@@ -31,7 +31,7 @@ async function cadastroReal(): Promise<ClienteCadastro[]> {
 
 /** Clientes que o usuário pode ver, com a situação calculada (independe da carteira). */
 async function cadastroDoUsuario(usuario: Usuario): Promise<ClienteResumo[]> {
-  const analisadas = await listarContasInsight();
+  const analisadas = await listarContasInsight(usuario.id);
   const porId = new Map(analisadas.map((conta) => [conta.id, conta]));
   const cadastro = await cadastroReal();
   const noCadastro = new Set(cadastro.map((c) => c.id));
@@ -79,15 +79,15 @@ export async function buscarClienteNoCadastro(usuario: Usuario, id: string): Pro
 
 /**
  * "Excluir cliente": apaga de vez as reuniões do cliente e tudo o que derivou delas (Central, Dashboard,
- * Clientes, indicadores e assistente), para todos. Sem desfazer: uma reunião nova desse cliente começa um
+ * Clientes, indicadores e assistente). Só as do usuário: o mesmo cliente na carteira de outro fica intacto. Sem desfazer: uma reunião nova desse cliente começa um
  * histórico novo, só com ela. Os compromissos da agenda ficam. Vale também para o cliente que só tem
  * reuniões sem transcrição ativa. null: inexistente ou fora do escopo (mesma resposta).
  * Lança ErroRemocao se alguma reunião do cliente ainda está em análise.
  */
 export async function excluirCliente(usuario: Usuario, contaId: string) {
   if (!podeAcessarConta(usuario, contaId)) return null;
-  const nome = (await buscarClienteNoCadastro(usuario, contaId))?.nome ?? (await nomeDoClienteNasReunioes(contaId));
+  const nome = (await buscarClienteNoCadastro(usuario, contaId))?.nome ?? (await nomeDoClienteNasReunioes(usuario.id, contaId));
   if (!nome) return null;
-  const { reunioes } = await excluirReunioesDoCliente(contaId);
+  const { reunioes } = await excluirReunioesDoCliente(usuario.id, contaId);
   return { cliente: { id: contaId, nome }, reunioesExcluidas: reunioes };
 }

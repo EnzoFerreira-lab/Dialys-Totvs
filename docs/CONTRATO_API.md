@@ -10,12 +10,14 @@ A API recebe reuniões, roda o pipeline de análise e devolve os sinais de negó
 | `POST` | `/api/v1/reunioes/processar` | Enviar uma reunião para análise | UC01, UC02 |
 | `GET` | `/api/v1/reunioes/{id}` | Acompanhar o pipeline e ler o resultado | UC02 |
 | `GET` | `/api/v1/insights` | Listar sinais com filtros (Dashboard) | UC03, UC04 |
-| `POST` | `/api/v1/assistente/mensagens` | Pergunta ao assistente Dialys (chat, exige sessão) | Assistente |
-| `GET` | `/api/v1/assistente/conversas/{id}` | Histórico de uma conversa do próprio usuário (exige sessão) | Assistente |
+| `POST` | `/api/v1/assistente/mensagens` | Pergunta ao assistente Dialys (chat) | Assistente |
+| `GET` | `/api/v1/assistente/conversas/{id}` | Histórico de uma conversa do próprio usuário | Assistente |
 | `GET` | `/api/v1/resumo` | KPIs agregados, matriz de urgência e agenda (Dashboard e assistente Dialys) | UC03, UC05 |
 | `POST` | `/api/v1/crm/sincronizar` | Enviar um insight ao CRM (webhook de enriquecimento) | UC05 / US-06 |
 
-> ⚠️ **Piloto:** a API ainda não exige autenticação (prevista na T02) e o envio ao CRM é simulado: o webhook fica gravado e aparece no log, mas nada sai do servidor. Não publique a URL antes da T02.
+**Autenticação.** Todas as rotas exigem a sessão do servidor: o cookie `dialys_sessao` (httpOnly, assinado com HMAC-SHA256) criado no login. Sem sessão válida: `401 SESSAO_AUSENTE`. **Cada usuário só enxerga os próprios dados:** a reunião enviada pertence a quem a enviou, e `GET /reunioes/{id}`, `GET /insights`, `GET /resumo` e `POST /crm/sincronizar` só consideram as reuniões desse usuário (a de outro responde `404`, como inexistente). A mesma reunião pode ser enviada por usuários diferentes; o `codigo` ("Reunião 001") é numerado por usuário.
+
+> ⚠️ **Piloto:** o envio ao CRM é simulado: o webhook fica gravado e aparece no log, mas nada sai do servidor.
 
 ---
 
@@ -589,4 +591,4 @@ POST /crm/sincronizar           → 201 { protocolo }
 | Banco em arquivo JSON local (`.dialys/banco.json`), um processo só | Postgres (tabelas `reuniao`, `analise`, `sinal`, `mencao_produto`, `sincronizacao_crm`, `conversa_assistente`, `compromisso`); só os repositórios mudam |
 | Carteira = contas analisadas | Carteira do CRM/ERP em `cadastroReal()`; calendário externo (Outlook/Teams) numa etapa futura |
 | Webhook do CRM simulado | POST assinado (HMAC) para a URL do CRM, com retentativa |
-| Sem autenticação | Token OAuth2 (client credentials) para sistemas e sessão do IdP para o frontend |
+| Sessão por cookie, com usuários em `.dialys/usuarios.json` | Token OAuth2 (client credentials) para sistemas e sessão do IdP para o frontend |

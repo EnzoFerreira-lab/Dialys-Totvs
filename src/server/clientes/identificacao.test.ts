@@ -9,6 +9,7 @@ import { listarAnalisesConcluidas } from "../db/repositorio";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar } from "../pipeline/processar-reuniao";
 import { lerNomesClientes, nomeDoCliente } from "./identificacao";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 let pasta: string;
 let arquivoNomes: string;
@@ -63,7 +64,7 @@ describe("nome do cliente", () => {
       { motor: motorFalso() },
     );
 
-    const nomes = (await listarAnalisesConcluidas()).map((a) => nomeConta(a.reuniao)).sort();
+    const nomes = (await listarAnalisesConcluidas(DEMO)).map((a) => nomeConta(a.reuniao)).sort();
     expect(nomes).toEqual(["Escolhido no Envio", "Estaleiro Exemplo Ltda"]);
     expect(await readFile(process.env.DIALYS_BANCO_ARQUIVO!, "utf8")).not.toContain("nomeCliente");
   });

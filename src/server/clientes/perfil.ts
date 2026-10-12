@@ -196,7 +196,7 @@ function reuniaoDaLista(reuniao: ReuniaoRegistro, analise: AnaliseConcluida | nu
 
 /** Reuniões ativas e com transcrição removida, agrupadas pela chave do cliente, já no escopo do usuário. */
 async function reunioesPorCliente(usuario: Usuario) {
-  const [ativas, removidas] = await Promise.all([listarAnalisesConcluidas(), listarReunioesSemTranscricao()]);
+  const [ativas, removidas] = await Promise.all([listarAnalisesConcluidas(usuario.id), listarReunioesSemTranscricao(usuario.id)]);
   const visivel = (id: string) => podeAcessarConta(usuario, id);
   const grupos = new Map<string, { ativas: AnaliseConcluida[]; removidas: ReuniaoRegistro[] }>();
   const grupo = (id: string) => {
@@ -220,7 +220,7 @@ async function reunioesPorCliente(usuario: Usuario) {
 export async function listarClientesUnificados(usuario: Usuario, agora = new Date()): Promise<ClienteListagem[]> {
   const [grupos, contas, proximos] = await Promise.all([
     reunioesPorCliente(usuario),
-    listarContasInsight(),
+    listarContasInsight(usuario.id),
     // Próximos 60 dias da agenda do usuário: o próximo compromisso agendado com cada cliente.
     listarCompromissos(usuario, { de: dataNoFuso(agora, fusoHorario()), ate: somarDias(dataNoFuso(agora, fusoHorario()), 60) }),
   ]);
@@ -272,7 +272,7 @@ export async function montarPerfilCliente(usuario: Usuario, contaId: string): Pr
   const grupo = grupos.get(contaId);
   if (!grupo) return null;
   const { ativas, removidas } = grupo;
-  const conta = (await listarContasInsight()).find((c) => c.id === contaId) ?? null;
+  const conta = (await listarContasInsight(usuario.id)).find((c) => c.id === contaId) ?? null;
   const qualquer = ativas[0]?.reuniao ?? removidas[0];
 
   const reunioes = [...ativas.map((a) => reuniaoDaLista(a.reuniao, a)), ...removidas.map((r) => reuniaoDaLista(r, null))].sort((a, b) =>

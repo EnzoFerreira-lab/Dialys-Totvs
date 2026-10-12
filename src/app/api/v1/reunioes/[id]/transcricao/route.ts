@@ -8,16 +8,16 @@ import { SEM_SESSAO } from "@/server/api/agenda";
 import { comTratamento, erro, json } from "@/server/api/http";
 import { usuarioDaRequisicao } from "@/server/auth/sessao";
 import { podeAcessarConta } from "@/server/auth/usuarios";
-import { buscarReuniao, ErroRemocao, removerTranscricao } from "@/server/db/repositorio";
+import { buscarReuniaoDoUsuario, ErroRemocao, removerTranscricao } from "@/server/db/repositorio";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return comTratamento("DELETE /reunioes/{id}/transcricao", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const { id } = await params;
     if (!/^reu_[0-9a-f]{32}$/.test(id)) return erro(400, "ID_INVALIDO", "ID de reunião inválido (formato reu_<32 hex>).", requestId);
 
-    const existente = await buscarReuniao(id);
+    const existente = await buscarReuniaoDoUsuario(id, usuario.id);
     if (!existente || !podeAcessarConta(usuario, chaveConta(existente))) {
       return erro(404, "REUNIAO_NAO_ENCONTRADA", "Reunião não encontrada.", requestId);
     }

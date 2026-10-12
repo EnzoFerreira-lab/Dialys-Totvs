@@ -22,7 +22,7 @@ export function TextInput({ id, label, trailing, className, ...props }: TextInpu
           id={id}
           className={cn(
             "h-10 w-full border-0 border-b border-border-strong bg-field-01 px-4 text-[13px] text-text-primary",
-            "placeholder:text-text-placeholder focus:outline-2 focus:-outline-offset-2 focus:outline-focus",
+            "placeholder:text-text-placeholder focus:outline-2 focus:-outline-offset-2 focus:outline-focus aria-invalid:border-b-2 aria-invalid:border-support-error",
             trailing ? "pr-11" : undefined,
           )}
           {...props}

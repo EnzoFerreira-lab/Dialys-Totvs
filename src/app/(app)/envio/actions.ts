@@ -5,6 +5,8 @@
 import type { ContaResumo } from "@/lib/contas";
 import type { ExemploCompleto } from "@/lib/transcricao";
 import { buscarExemplo } from "@/server/ai/demo/exemplos";
+import { usuarioDaSessao } from "@/server/auth/sessao-pagina";
+import { podeAcessarConta } from "@/server/auth/usuarios";
 import { listarContasParaEnvio } from "@/server/insights/contas";
 
 export type FalhaAnalise = {
@@ -18,10 +20,13 @@ export type FalhaAnalise = {
 /** Texto e metadados de um exemplo do menu (amostra TOTVS). */
 export async function carregarExemplo(id: string): Promise<ExemploCompleto | null> {
   if (typeof id !== "string" || id.length > 120) return null;
+  if (!(await usuarioDaSessao())) return null;
   return buscarExemplo(id);
 }
 
-/** Empresas com reunião já analisada, para associar uma nova reunião (seletor "Criar ˅"). */
+/** Empresas do usuário com reunião já analisada, para associar uma nova reunião (seletor "Criar ˅"). */
 export async function listarContasAnalisadas(): Promise<ContaResumo[]> {
-  return listarContasParaEnvio();
+  const usuario = await usuarioDaSessao();
+  if (!usuario) return [];
+  return (await listarContasParaEnvio(usuario.id)).filter((conta) => podeAcessarConta(usuario, conta.id));
 }

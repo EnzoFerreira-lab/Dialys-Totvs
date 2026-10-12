@@ -2,38 +2,58 @@
 // O navegador não consegue forjar nem alterar o usuário; o servidor sempre deriva quem é a pessoa
 // daqui, nunca de um id enviado no corpo da requisição.
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { buscarUsuario, type Usuario } from "./usuarios";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { arquivoBanco } from "../db/banco";
+import { buscarUsuario } from "./cadastro";
+import type { Usuario } from "./usuarios";
 
 export const COOKIE_SESSAO = "dialys_sessao";
+/** Sessão comum: dura o expediente (e some ao fechar o navegador). */
 export const DURACAO_SESSAO_S = 8 * 60 * 60;
+/** "Lembrar meu acesso neste dispositivo". */
+export const DURACAO_SESSAO_LEMBRADA_S = 30 * 24 * 60 * 60;
 
-// Sem DIALYS_SESSAO_SEGREDO, um segredo aleatório por processo: seguro, mas as sessões caem quando o
-// servidor reinicia. Fica no globalThis para as rotas (empacotadas em separado) usarem o mesmo.
+// Sem DIALYS_SESSAO_SEGREDO, um segredo gerado na primeira vez e guardado ao lado do banco
+// (.dialys/sessao.chave): as sessões continuam valendo quando o servidor reinicia. Fica no globalThis para
+// as rotas (empacotadas em separado) usarem o mesmo.
 const chaveSegredo = Symbol.for("dialys.sessao.segredo");
 type GlobalComSegredo = typeof globalThis & { [chaveSegredo]?: Buffer };
+
+function segredoGuardado(): Buffer {
+  const arquivo = path.join(path.dirname(arquivoBanco()), "sessao.chave");
+  try {
+    const lido = readFileSync(arquivo, "utf8").trim();
+    if (lido.length >= 43) return Buffer.from(lido, "base64url");
+  } catch {
+    // Ainda não existe: gera abaixo.
+  }
+  const novo = randomBytes(32);
+  try {
+    mkdirSync(path.dirname(arquivo), { recursive: true });
+    writeFileSync(arquivo, novo.toString("base64url"), { encoding: "utf8", mode: 0o600 });
+  } catch (erro) {
+    console.warn("[dialys/auth] não foi possível guardar o segredo da sessão; as sessões expiram ao reiniciar o servidor.", erro);
+  }
+  return novo;
+}
 
 function segredo(): Buffer {
   const configurado = process.env.DIALYS_SESSAO_SEGREDO;
   if (configurado && configurado.length >= 32) return Buffer.from(configurado, "utf8");
   const global = globalThis as GlobalComSegredo;
-  if (!global[chaveSegredo]) {
-    global[chaveSegredo] = randomBytes(32);
-    console.warn(
-      "[dialys/auth] DIALYS_SESSAO_SEGREDO ausente (ou com menos de 32 caracteres): usando um segredo temporário. As sessões expiram ao reiniciar o servidor.",
-    );
-  }
-  return global[chaveSegredo];
+  return (global[chaveSegredo] ??= segredoGuardado());
 }
 
 const assinar = (conteudo: string) => createHmac("sha256", segredo()).update(conteudo).digest("base64url");
 
-export function criarTokenSessao(usuarioId: string, agora = Date.now()) {
-  const conteudo = Buffer.from(JSON.stringify({ u: usuarioId, exp: agora + DURACAO_SESSAO_S * 1000 })).toString("base64url");
+export function criarTokenSessao(usuarioId: string, agora = Date.now(), duracaoS = DURACAO_SESSAO_S) {
+  const conteudo = Buffer.from(JSON.stringify({ u: usuarioId, exp: agora + duracaoS * 1000 })).toString("base64url");
   return `${conteudo}.${assinar(conteudo)}`;
 }
 
-/** Usuário do token, ou null se o token faltar, estiver adulterado, expirado ou apontar para usuário inexistente. */
-export function lerTokenSessao(token: string | null | undefined, agora = Date.now()): Usuario | null {
+/** Id do usuário de um token íntegro e dentro da validade; null se faltar, estiver adulterado ou vencido. */
+export function idDoTokenSessao(token: string | null | undefined, agora = Date.now()): string | null {
   if (!token) return null;
   const [conteudo, assinatura] = token.split(".");
   if (!conteudo || !assinatura) return null;
@@ -42,20 +62,29 @@ export function lerTokenSessao(token: string | null | undefined, agora = Date.no
   if (esperada.length !== recebida.length || !timingSafeEqual(esperada, recebida)) return null;
   try {
     const { u, exp } = JSON.parse(Buffer.from(conteudo, "base64url").toString("utf8")) as { u?: unknown; exp?: unknown };
-    if (typeof u !== "string" || typeof exp !== "number" || exp < agora) return null;
-    return buscarUsuario(u);
+    return typeof u === "string" && typeof exp === "number" && exp >= agora ? u : null;
   } catch {
     return null;
   }
 }
 
-/** Lê o cookie de sessão direto do cabeçalho da requisição (Route Handlers). */
-export function usuarioDaRequisicao(request: Request): Usuario | null {
-  const cookies = request.headers.get("cookie") ?? "";
-  const valor = cookies
+/** Usuário do token, ou null se o token faltar, estiver adulterado, expirado ou apontar para usuário inexistente. */
+export async function lerTokenSessao(token: string | null | undefined, agora = Date.now()): Promise<Usuario | null> {
+  const id = idDoTokenSessao(token, agora);
+  return id ? buscarUsuario(id) : null;
+}
+
+/** Valor do cookie de sessão num cabeçalho Cookie. */
+export function tokenDoCabecalho(cookies: string | null) {
+  const valor = (cookies ?? "")
     .split(";")
     .map((parte) => parte.trim())
     .find((parte) => parte.startsWith(`${COOKIE_SESSAO}=`))
     ?.slice(COOKIE_SESSAO.length + 1);
-  return lerTokenSessao(valor ? decodeURIComponent(valor) : null);
+  return valor ? decodeURIComponent(valor) : null;
+}
+
+/** Lê o cookie de sessão direto do cabeçalho da requisição (Route Handlers). */
+export function usuarioDaRequisicao(request: Request): Promise<Usuario | null> {
+  return lerTokenSessao(tokenDoCabecalho(request.headers.get("cookie")));
 }

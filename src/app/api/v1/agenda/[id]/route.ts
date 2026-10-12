@@ -11,7 +11,7 @@ type Contexto = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Contexto) {
   return comTratamento("GET /agenda/{id}", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const compromisso = await buscarCompromisso(usuario, (await params).id);
     if (!compromisso) return erro(404, "COMPROMISSO_NAO_ENCONTRADO", "Compromisso não encontrado.", requestId);
@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: Contexto) {
 
 export async function PATCH(request: Request, { params }: Contexto) {
   return comTratamento("PATCH /agenda/{id}", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const lido = await lerCorpoJson(request, requestId);
     if ("resposta" in lido) return lido.resposta;

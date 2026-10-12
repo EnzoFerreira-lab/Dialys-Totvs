@@ -22,7 +22,7 @@ const Corpo = z.object({
 
 export async function POST(request: Request) {
   return comTratamento("POST /agenda/pauta", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const lido = await lerCorpoJson(request, requestId);
     if ("resposta" in lido) return lido.resposta;

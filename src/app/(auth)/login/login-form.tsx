@@ -1,23 +1,27 @@
 "use client";
 
-import { ArrowRight, CheckmarkFilled, Locked, Security, View, ViewOff } from "@carbon/icons-react";
+import { ArrowRight, CheckmarkFilled, Locked, Security, UserFollow, View, ViewOff } from "@carbon/icons-react";
 import { useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/text-input";
 import { entrar } from "./actions";
+import { CriarConta } from "./criar-conta";
 import { RecuperarSenha } from "./recuperar-senha";
 
 export function LoginForm() {
   // ?volta=/assistente: depois de entrar, volta para a página que pediu a sessão.
   const volta = useSearchParams().get("volta") ?? "";
   const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [recuperando, setRecuperando] = useState(false);
   const [emailDigitado, setEmailDigitado] = useState("");
   const [senhaRedefinida, setSenhaRedefinida] = useState(false);
   const campoEmail = useRef<HTMLInputElement>(null);
   const campoSenha = useRef<HTMLInputElement>(null);
+  const [estado, enviar, entrando] = useActionState(entrar, null);
+  const [criandoConta, setCriandoConta] = useState(false);
+
+  if (criandoConta) return <CriarConta onVoltar={() => setCriandoConta(false)} />;
 
   return (
     <div className="w-full max-w-[332px]">
@@ -40,8 +44,8 @@ export function LoginForm() {
         </p>
       ) : null}
 
-      {/* Piloto: qualquer credencial entra; a ação cria a sessão assinada no servidor (T02 troca pelo IdP). */}
-      <form className="mt-9" action={entrar} onSubmit={() => setSubmitting(true)} noValidate>
+      {/* A ação confere e-mail e senha no servidor e cria a sessão assinada (T02 troca pelo IdP corporativo). */}
+      <form className="mt-9" action={enviar} noValidate>
         <input type="hidden" name="volta" value={volta} />
         <TextInput
           id="email"
@@ -51,6 +55,9 @@ export function LoginForm() {
           placeholder="Digite seu E-mail"
           autoComplete="username"
           ref={campoEmail}
+          defaultValue={estado?.email}
+          aria-invalid={estado ? true : undefined}
+          aria-describedby={estado ? "erro-login" : undefined}
         />
 
         <TextInput
@@ -61,6 +68,8 @@ export function LoginForm() {
           placeholder="Digite sua senha"
           autoComplete="current-password"
           ref={campoSenha}
+          aria-invalid={estado ? true : undefined}
+          aria-describedby={estado ? "erro-login" : undefined}
           className="mt-6"
           trailing={
             <button
@@ -97,15 +106,33 @@ export function LoginForm() {
           Lembrar meu acesso neste dispositivo
         </label>
 
+        {estado ? (
+          <p id="erro-login" role="alert" className="mt-5 text-[13px] text-support-error">
+            {estado.erro}
+          </p>
+        ) : null}
+
         <Button
           type="submit"
-          disabled={submitting}
+          disabled={entrando}
           className="mt-8 h-10 w-full justify-between rounded-[3px] px-4 text-[13px] font-medium"
         >
-          Entrar na Plataforma
+          {entrando ? "Entrando…" : "Entrar na Plataforma"}
           <ArrowRight size={16} aria-hidden="true" />
         </Button>
       </form>
+
+      <p className="mt-5 text-center text-[12px] text-text-secondary">
+        Ainda não tem acesso?{" "}
+        <button
+          type="button"
+          onClick={() => setCriandoConta(true)}
+          className="inline-flex items-center gap-1 font-medium text-text-primary underline underline-offset-[3px] hover:text-text-secondary"
+        >
+          <UserFollow size={14} aria-hidden="true" />
+          Criar conta
+        </button>
+      </p>
 
       <RecuperarSenha
         aberto={recuperando}

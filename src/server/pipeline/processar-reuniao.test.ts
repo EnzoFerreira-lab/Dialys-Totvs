@@ -9,6 +9,7 @@ import { listarInsights } from "../db/repositorio";
 import { CITACAO_INVENTADA, motorFalso } from "./__fixtures__/motor-falso";
 import { lerEntrada } from "../api/entrada-reuniao";
 import { ErroEntrada, agendarProcessamento, consultarReuniao, receberEProcessar, receberReuniao, type EntradaReuniao } from "./processar-reuniao";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 let pasta: string;
 beforeEach(async () => {
@@ -60,12 +61,12 @@ describe("pipeline processarReuniao", () => {
     expect(reuniao.falha).toMatchObject({ codigo: "ANALISE_RECUSADA", httpStatus: 422 });
     expect(reuniao.etapas.find((e) => e.nome === "ANALISE_IA")?.status).toBe("FALHOU");
     expect((await lerBanco()).sinal).toHaveLength(0);
-    expect(await listarInsights()).toHaveLength(0);
+    expect(await listarInsights(DEMO)).toHaveLength(0);
   });
 
   it("entrada inválida é recusada sem gravar nada", async () => {
-    await expect(receberReuniao(texto("curto"))).rejects.toMatchObject({ codigo: "TRANSCRICAO_VAZIA", httpStatus: 400 });
-    await expect(receberReuniao(texto(transcricaoTeste(), { contaId: "conta inválida!" }))).rejects.toBeInstanceOf(ErroEntrada);
+    await expect(receberReuniao(texto("curto"), DEMO)).rejects.toMatchObject({ codigo: "TRANSCRICAO_VAZIA", httpStatus: 400 });
+    await expect(receberReuniao(texto(transcricaoTeste(), { contaId: "conta inválida!" }), DEMO)).rejects.toBeInstanceOf(ErroEntrada);
     expect((await lerBanco()).reuniao).toHaveLength(0);
   });
 
@@ -76,14 +77,14 @@ describe("pipeline processarReuniao", () => {
 
     // Mesmo texto, só com espaços e quebras de linha diferentes: duplicada, e nada é gravado.
     const reformatada = `  ${original.replace(/\n/g, "\n\n").replace(/ /g, "  ")}  `;
-    await expect(receberReuniao(texto(reformatada))).rejects.toMatchObject({
+    await expect(receberReuniao(texto(reformatada), DEMO)).rejects.toMatchObject({
       codigo: "REUNIAO_DUPLICADA",
       httpStatus: 409,
       message: expect.stringContaining("Reunião 001 · Grupo Horizonte"),
     });
     // Mesmo ID de reunião da TOTVS, ainda em análise.
-    await receberReuniao(texto(transcricaoTeste(), { contexto: { idReuniao: "4471" } }));
-    await expect(receberReuniao(texto(transcricaoTeste(), { contexto: { idReuniao: "4471" } }))).rejects.toMatchObject({
+    await receberReuniao(texto(transcricaoTeste(), { contexto: { idReuniao: "4471" } }), DEMO);
+    await expect(receberReuniao(texto(transcricaoTeste(), { contexto: { idReuniao: "4471" } }), DEMO)).rejects.toMatchObject({
       codigo: "REUNIAO_DUPLICADA",
       message: expect.stringContaining("já está sendo analisada"),
     });
@@ -110,7 +111,7 @@ describe("pipeline processarReuniao", () => {
 describe("reunião parada no meio (servidor reiniciado ou after() que não rodou)", () => {
   it("a consulta retoma a análise a partir do texto gravado, sem esperar o limite", async () => {
     // Recebida, mas nunca processada neste processo (como depois de um reinício).
-    const recebida = await receberReuniao(texto(transcricaoTeste()));
+    const recebida = await receberReuniao(texto(transcricaoTeste()), DEMO);
     const consultada = await consultarReuniao(recebida.id, { motor: motorFalso() });
     expect(consultada).toMatchObject({ status: "EM_PROCESSAMENTO", retomadas: 1 });
     await vi.waitFor(async () => expect((await lerBanco()).reuniao[0].status).toBe("CONCLUIDA"));
@@ -118,14 +119,14 @@ describe("reunião parada no meio (servidor reiniciado ou after() que não rodou
   });
 
   it("recém-agendada não é retomada; depois de 2 retomadas sem sucesso, falha", async () => {
-    const recebida = await receberReuniao(texto(transcricaoTeste()));
+    const recebida = await receberReuniao(texto(transcricaoTeste()), DEMO);
     agendarProcessamento(recebida.id);
     expect(await consultarReuniao(recebida.id)).toMatchObject({ status: "EM_PROCESSAMENTO" });
     expect((await lerBanco()).reuniao[0].retomadas).toBeUndefined();
 
     // Motor que nunca termina: as retomadas se esgotam.
     const travado = motorFalso(() => new Promise(() => {}));
-    const outra = await receberReuniao(texto(transcricaoTeste()));
+    const outra = await receberReuniao(texto(transcricaoTeste()), DEMO);
     const banco = () => lerBanco().then((b) => b.reuniao.find((r) => r.id === outra.id)!);
     await consultarReuniao(outra.id, { motor: travado });
     // Simula o processo morto: some do registro em execução.

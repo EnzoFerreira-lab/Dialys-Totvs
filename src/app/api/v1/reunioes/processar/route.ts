@@ -4,7 +4,9 @@
 //   ?modo=sincrono       espera o pipeline terminar: 201 com o resultado, ou o status HTTP da falha.
 import { after } from "next/server";
 import { lerEntrada } from "@/server/api/entrada-reuniao";
+import { SEM_SESSAO } from "@/server/api/agenda";
 import { comTratamento, erro, json, linkReuniao, serializarReuniao } from "@/server/api/http";
+import { usuarioDaRequisicao } from "@/server/auth/sessao";
 import { buscarResultado } from "@/server/db/repositorio";
 import { ErroEntrada, agendarProcessamento, processarReuniao, receberReuniao } from "@/server/pipeline/processar-reuniao";
 
@@ -13,6 +15,8 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   return comTratamento("POST /reunioes/processar", async (requestId) => {
+    const usuario = await usuarioDaRequisicao(request);
+    if (!usuario) return erro(401, "SESSAO_AUSENTE", SEM_SESSAO, requestId);
     const modo = new URL(request.url).searchParams.get("modo") ?? "assincrono";
     if (modo !== "assincrono" && modo !== "sincrono") {
       return erro(400, "MODO_INVALIDO", 'Parâmetro "modo" deve ser "assincrono" ou "sincrono".', requestId);
@@ -22,7 +26,7 @@ export async function POST(request: Request) {
     let reuniao;
     try {
       entrada = await lerEntrada(request);
-      reuniao = await receberReuniao(entrada);
+      reuniao = await receberReuniao(entrada, usuario.id);
     } catch (falha) {
       if (falha instanceof ErroEntrada) return erro(falha.httpStatus, falha.codigo, falha.message, requestId);
       throw falha;

@@ -16,6 +16,7 @@ import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar, receberReuniao } from "../pipeline/processar-reuniao";
 import { listarClientes } from "./clientes";
 import { listarClientesUnificados, montarPerfilCliente } from "./perfil";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 vi.mock("next/server", async (original) => ({
   ...(await original<typeof import("next/server")>()),
@@ -81,9 +82,9 @@ describe("excluir cliente", () => {
     expect(await resposta.json()).toEqual({ excluido: true, cliente: { id: "conta-horizonte", nome: "Grupo Horizonte" }, reunioesExcluidas: 2 });
 
     expect(await ids(RICARDO)).toEqual(["conta-beta"]);
-    expect((await listarInsights()).every((i) => i.reuniao.contaId === "conta-beta")).toBe(true);
-    expect((await listarReunioesCentral()).map((r) => r.conta.id)).toEqual(["conta-beta"]);
-    expect((await montarResumo()).kpis).toMatchObject({ reunioesAnalisadas: 1, contasAnalisadas: 1 });
+    expect((await listarInsights(DEMO)).every((i) => i.reuniao.contaId === "conta-beta")).toBe(true);
+    expect((await listarReunioesCentral(DEMO)).map((r) => r.conta.id)).toEqual(["conta-beta"]);
+    expect((await montarResumo(DEMO)).kpis).toMatchObject({ reunioesAnalisadas: 1, contasAnalisadas: 1 });
     const consulta = await executarFerramenta({ usuario: RICARDO, agora: new Date() }, "consultar_empresa", { nome: "Horizonte" });
     expect(consulta.dados.empresas).toEqual([]);
     expect(await montarPerfilCliente(RICARDO, "conta-horizonte")).toBeNull();
@@ -107,11 +108,11 @@ describe("excluir cliente", () => {
   it("cliente só com reuniões sem transcrição ativa também pode ser excluído", async () => {
     const [beta] = await daConta("conta-beta");
     await removerTranscricao(beta.id, RICARDO.id);
-    expect((await listarReunioesCentral()).some((r) => r.conta.id === "conta-beta" && r.transcricaoRemovidaEm)).toBe(true);
+    expect((await listarReunioesCentral(DEMO)).some((r) => r.conta.id === "conta-beta" && r.transcricaoRemovidaEm)).toBe(true);
 
     const resposta = await removerDe(RICARDO, "conta-beta");
     expect(await resposta.json()).toMatchObject({ cliente: { id: "conta-beta", nome: "Beta Indústria" }, reunioesExcluidas: 1 });
-    expect((await listarReunioesCentral()).some((r) => r.conta.id === "conta-beta")).toBe(false);
+    expect((await listarReunioesCentral(DEMO)).some((r) => r.conta.id === "conta-beta")).toBe(false);
     expect((await listarClientesUnificados(RICARDO)).map((c) => c.id)).not.toContain("conta-beta");
   });
 
@@ -119,11 +120,11 @@ describe("excluir cliente", () => {
     await removerDe(RICARDO, "conta-horizonte");
     expect((await enviar(RICARDO, { texto: transcricaoTeste(), contaId: "conta-horizonte", contaNome: "Grupo Horizonte" })).status).toBe(201);
     expect((await listarClientesUnificados(RICARDO)).find((c) => c.id === "conta-horizonte")?.totalReunioes).toBe(1);
-    expect((await listarReunioesCentral()).filter((r) => r.conta.id === "conta-horizonte")).toHaveLength(1);
+    expect((await listarReunioesCentral(DEMO)).filter((r) => r.conta.id === "conta-horizonte")).toHaveLength(1);
   });
 
   it("recusa (409) enquanto uma reunião do cliente está em análise, sem apagar nada", async () => {
-    await receberReuniao({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" });
+    await receberReuniao({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-horizonte", contaNome: "Grupo Horizonte" }, DEMO);
     const resposta = await removerDe(RICARDO, "conta-horizonte");
     expect(resposta.status).toBe(409);
     expect((await resposta.json()).erro.codigo).toBe("REUNIAO_EM_PROCESSAMENTO");

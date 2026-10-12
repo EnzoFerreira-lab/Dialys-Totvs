@@ -15,6 +15,8 @@ cp .env.example .env.local   # configuração local (não vai para o git); coloq
 npm run dev        # http://localhost:3000 → redireciona para /login
 ```
 
+**Acesso.** Entre com o usuário de demonstração `ricardo.alves@totvs.com.br` (senha `Dialys2026`, ou a de `DIALYS_SENHA_DEMONSTRACAO`), que tem as reuniões já analisadas, ou crie uma conta em **Criar conta** na tela de login. Cada conta tem os próprios clientes, reuniões, agenda e conversas com o assistente; uma conta nova começa vazia.
+
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | Servidor de desenvolvimento |
@@ -39,7 +41,7 @@ Menu, do geral para o detalhe: **Home · Dashboard · Clientes · Central de Ins
 
 | Rota | Tela |
 |---|---|
-| `/login` | Login enterprise (piloto: qualquer credencial entra). **Esqueceu a senha?** abre a recuperação em 3 etapas: e-mail → código de 6 dígitos (validade de 10 min, 5 tentativas, reenvio após 30 s, resposta que não revela se o e-mail existe) → nova senha (8+ caracteres, letras e números, confirmação). Tudo é conferido no servidor ([src/server/auth/recuperacao.ts](src/server/auth/recuperacao.ts)); o **envio do e-mail é simulado**: a janela mostra a prévia do e-mail com o código, identificada como simulação, e a senha nova não é gravada (o piloto não verifica senhas até o IdP corporativo, T02) |
+| `/login` | Login com e-mail e senha conferidos no servidor ("E-mail ou senha incorretos" sem dizer qual dos dois). **Lembrar meu acesso** mantém a sessão por 30 dias (sem ele, até fechar o navegador, no máximo 8 h). **Criar conta**: nome, e-mail, cargo e senha (8+ caracteres, letras e números); a conta começa vazia e já entra. **Esqueceu a senha?** abre a recuperação em 3 etapas: e-mail → código de 6 dígitos (validade de 10 min, 5 tentativas, reenvio após 30 s, resposta que não revela se o e-mail existe) → nova senha, que é gravada. Tudo é conferido no servidor ([src/server/auth/](src/server/auth/)); só o **envio do e-mail é simulado**: a janela mostra a prévia do e-mail com o código, identificada como simulação |
 | `/clientes` | **Home** (início após o login; a rota continua `/clientes`): saudação, **Minha agenda** (semana no computador, lista do dia no celular, criar/editar/cancelar compromissos) e **Meus clientes** (lista compacta com busca e "Ver cliente", que abre a ficha na aba Clientes) |
 | `/contas` | **Clientes**: todos os clientes unificados (uma linha por cliente, juntando todas as reuniões dele), com situação e tendência da saúde, criticidade, nº de reuniões, alertas por tipo e a próxima reunião marcada. Busca, filtros (situação, com reunião marcada) e ordenação |
 | `/contas/[id]` | **Ficha do cliente**: saúde (com o cálculo e a tendência), criticidade, última reunião, próxima reunião marcada; **principais alertas** de todas as reuniões (do mais crítico, com citação, recomendação, reunião de origem e status no CRM); **todas as reuniões** com a saúde de cada uma; **agenda com o cliente** e **Marcar reunião** (mesma agenda da Home); diagnóstico, ação sugerida e próximos passos; produtos e concorrentes citados. Atalhos: Perguntar ao Dialys, Enviar reunião (já com o cliente escolhido) e cada reunião na Central |
@@ -100,16 +102,16 @@ Na página `/assistente`, a área **Converse com o Dialys** responde perguntas s
 | `briefing.ts` | Briefing do dia dentro da conversa: pedido pelo botão "Briefing do dia" ou por texto ("briefing", "resumo do dia"). Montado dos dados do usuário, sem IA; é a única resposta que a tela lê em voz (`window.speechSynthesis`) |
 | `motor-demonstracao.ts` | Reserva sem IA (sem chave do Claude, ou `DIALYS_MODO_DEMO=true`): regras em português sobre as mesmas consultas |
 
-**Sessão.** O login cria um cookie de sessão assinado no servidor (piloto: qualquer credencial entra como a persona Ricardo Alves; a senha não é verificada até a T02). As rotas do assistente exigem essa sessão e checam a permissão de conta em toda consulta. Usuários e escopo ficam em [src/server/auth/usuarios.ts](src/server/auth/usuarios.ts).
+**Usuários e sessão.** As contas ficam em `.dialys/usuarios.json` ([src/server/auth/cadastro.ts](src/server/auth/cadastro.ts)), com a senha guardada só como hash scrypt; a persona Ricardo Alves vem de [src/server/auth/usuarios.ts](src/server/auth/usuarios.ts). O login cria um cookie httpOnly assinado (HMAC-SHA256), que só exige HTTPS quando a página veio por HTTPS (a demo pelo IP da rede funciona). Todas as telas do app passam pelo [src/proxy.ts](src/proxy.ts), que manda quem não está logado para o login e depois de volta à tela pedida, e todas as rotas `/api/v1` exigem a sessão (`401 SESSAO_AUSENTE`). **Cada usuário só vê os próprios dados:** toda reunião tem dono (`usuarioId`) e cada consulta do repositório filtra por ele; as reuniões gravadas antes disso são do Ricardo. A numeração "Reunião 001" é por usuário.
 
 | Variável (`.env.local`) | Obrigatória | Para quê |
 |---|---|---|
 | `DIALYS_MODO_DEMO` | não | `true`: análise e chat pelas regras locais, sem IA e sem custo (o mesmo acontece sem chave) |
 | `ANTHROPIC_API_KEY` | para usar o Claude | A mesma chave da análise. Só no servidor |
-| `DIALYS_SESSAO_SEGREDO` | recomendada | 32+ caracteres aleatórios para assinar a sessão. Sem ela, um segredo temporário é gerado e as sessões caem ao reiniciar o servidor |
+| `DIALYS_SESSAO_SEGREDO` | não | 32+ caracteres aleatórios para assinar a sessão. Sem ela, um segredo é gerado e guardado em `.dialys/sessao.chave` |
+| `DIALYS_SENHA_DEMONSTRACAO` | não | Senha do usuário de demonstração (padrão `Dialys2026`) até ser trocada em "Esqueceu a senha?" |
 | `DIALYS_MODELO_ASSISTENTE` | não | Outro modelo para o chat (padrão: o da análise) |
 | `DIALYS_ESFORCO_ASSISTENTE` | não | `low`/`medium`/`high`/`xhigh`/`max` (padrão `medium`) |
-| `DIALYS_COOKIE_INSEGURO` | não | `true` para o build de produção servido por HTTP fora de `localhost` (ex.: demo em rede local) |
 | `DIALYS_FUSO_HORARIO` | não | Fuso IANA da agenda (padrão `America/Sao_Paulo`) |
 | `DIALYS_EQUIPE_VENDEDORES` / `DIALYS_CARTEIRA_CONTAS` | não | Tamanho da equipe e da carteira no card "Sua operação comercial" (sem eles, o card mostra só as contas analisadas) |
 

@@ -10,15 +10,21 @@ import { lerBanco } from "../db/banco";
 import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar } from "../pipeline/processar-reuniao";
 import { listarContasInsight } from "./contas";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 const RICARDO = USUARIOS[0];
 const RESTRITO: Usuario = { id: "usr_restrito", nome: "Vendedor", email: "v@t.br", papel: "vendedor", escopo: { tipo: "contas", contaIds: ["conta-beta"] } };
 
-const reuniao = (contaId: string, contaNome: string, data: string, nps?: number) =>
-  receberEProcessar(
-    { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data, ...(nps !== undefined ? { nps } : {}), duracao: "00:44:40" } },
-    { motor: motorFalso() },
-  );
+/** A mesma reunião para o Ricardo e para o restrito: cada usuário só vê as próprias. */
+const reuniao = async (contaId: string, contaNome: string, data: string, nps?: number) => {
+  for (const dono of [RICARDO.id, RESTRITO.id]) {
+    await receberEProcessar(
+      { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, contexto: { data, ...(nps !== undefined ? { nps } : {}), duracao: "00:44:40" } },
+      { motor: motorFalso() },
+      dono,
+    );
+  }
+};
 
 let pasta: string;
 beforeEach(async () => {
@@ -36,8 +42,8 @@ afterEach(async () => {
 describe("Central com ?reuniao= (link a partir de uma reunião específica)", () => {
   it("abre a conta na reunião pedida, sem mudar a ordem das contas", async () => {
     const antiga = (await lerBanco()).reuniao.find((r) => r.contexto?.data === "2026-09-01 10:00:00")!.id;
-    const normal = await listarContasInsight();
-    const focada = await listarContasInsight({ reuniaoEmFoco: antiga });
+    const normal = await listarContasInsight(DEMO);
+    const focada = await listarContasInsight(DEMO, { reuniaoEmFoco: antiga });
     expect(focada.map((c) => c.id)).toEqual(normal.map((c) => c.id));
     const horizonte = focada.find((c) => c.id === "conta-horizonte")!;
     expect(horizonte).toMatchObject({ reuniaoId: antiga, reuniaoMaisRecente: false });
@@ -50,7 +56,7 @@ describe("Central com ?reuniao= (link a partir de uma reunião específica)", ()
 describe("ordem das reuniões", () => {
   it("reunião antiga enviada por último não vira a 'mais recente'", async () => {
     await reuniao("conta-horizonte", "Grupo Horizonte", "2026-07-10 08:00:00");
-    const horizonte = (await listarContasInsight()).find((c) => c.id === "conta-horizonte")!;
+    const horizonte = (await listarContasInsight(DEMO)).find((c) => c.id === "conta-horizonte")!;
     expect(horizonte.reunioes.map((r) => r.data)).toEqual(["2026-10-07", "2026-09-01", "2026-07-10"]);
     expect(horizonte.reuniaoId).toBe(horizonte.reunioes[0].id);
     expect(horizonte.reuniaoMaisRecente).toBe(true);

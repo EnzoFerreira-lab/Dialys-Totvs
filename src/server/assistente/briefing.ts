@@ -28,7 +28,7 @@ function emTexto(trechos: TrechoBriefing[]) {
 }
 
 export async function gerarBriefingDoUsuario(usuario: Usuario, agora: Date) {
-  const resumo = await montarResumo(agora, (contaId) => podeAcessarConta(usuario, contaId));
+  const resumo = await montarResumo(usuario.id, agora, (contaId) => podeAcessarConta(usuario, contaId));
   // Agenda do usuário (mesma fonte da home): só o que ainda vai acontecer hoje e não foi cancelado.
   const fuso = fusoHorario();
   const compromissos = (await compromissosDeHoje(usuario, agora))

@@ -222,7 +222,7 @@ type ContaNome = { id: string; nome: string };
 
 /** Só nomes e ids das contas do escopo do usuário, para reconhecer citações; os dados vêm das consultas. */
 async function nomesDasContasDoUsuario(ctx: EntradaMotor["ctx"]): Promise<ContaNome[]> {
-  return (await listarContasInsight()).filter((c) => podeAcessarConta(ctx.usuario, c.id)).map((c) => ({ id: c.id, nome: c.nome }));
+  return (await listarContasInsight(ctx.usuario.id)).filter((c) => podeAcessarConta(ctx.usuario, c.id)).map((c) => ({ id: c.id, nome: c.nome }));
 }
 
 function mencoes(pergunta: string, contas: ContaNome[]): { conta: ContaNome | null; ambiguas: ContaNome[]; termo: string } {

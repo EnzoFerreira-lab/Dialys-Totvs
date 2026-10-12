@@ -7,6 +7,7 @@ import type { SinalRegistro } from "../db/banco";
 import { ANALISE_FALSA, motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar, type EntradaReuniao } from "../pipeline/processar-reuniao";
 import { listarContasInsight, listarContasParaEnvio, montarEvidencias } from "./contas";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 let pasta: string;
 beforeEach(async () => {
@@ -32,12 +33,12 @@ const soObjecao = motorFalso(async () => ({
 
 describe("Central de Insights a partir das reuniões analisadas", () => {
   it("sem reuniões analisadas, a Central fica vazia", async () => {
-    expect(await listarContasInsight()).toEqual([]);
+    expect(await listarContasInsight(DEMO)).toEqual([]);
   });
 
   it("cada empresa analisada entra uma vez, com sinais, produtos, evidências e diagnóstico", async () => {
     await analisar({ contaId: "conta-acme", contaNome: "Indústria Acme" });
-    const [conta] = await listarContasInsight();
+    const [conta] = await listarContasInsight(DEMO);
 
     expect(conta).toMatchObject({
       id: "conta-acme",
@@ -74,7 +75,7 @@ describe("Central de Insights a partir das reuniões analisadas", () => {
     // nome sai do CNAE + UF da amostra.
     await analisar({ contexto: { idReuniao: "971122" } });
 
-    const contas = await listarContasInsight();
+    const contas = await listarContasInsight(DEMO);
     expect(contas.map((c) => [c.nome, c.totalReunioes])).toEqual(
       expect.arrayContaining([
         ["Indústria Acme", 2],
@@ -88,7 +89,7 @@ describe("Central de Insights a partir das reuniões analisadas", () => {
     expect(contas.find((c) => c.nome.startsWith("Estaleiro"))?.id).toBe("codt-TFEHER");
 
     // O /envio só oferece empresas com identidade própria (não a reunião avulsa).
-    expect((await listarContasParaEnvio()).map((c) => c.id)).toEqual(["codt-TB5392", "codt-TFEHER", "conta-acme"]);
+    expect((await listarContasParaEnvio(DEMO)).map((c) => c.id)).toEqual(["codt-TB5392", "codt-TFEHER", "conta-acme"]);
   });
 
   it("ordena da mais crítica para a menos e mostra empresa sem sinais no fim", async () => {
@@ -99,7 +100,7 @@ describe("Central de Insights a partir das reuniões analisadas", () => {
     })));
     await analisar({ contaId: "conta-churn", contaNome: "Com Churn" });
 
-    const contas = await listarContasInsight();
+    const contas = await listarContasInsight(DEMO);
     expect(contas.map((c) => c.nome)).toEqual(["Com Churn", "Só Objeção", "Sem Sinal"]);
     expect(contas[2]).toMatchObject({ sinais: [], evidencias: [], insightIds: [] });
   });

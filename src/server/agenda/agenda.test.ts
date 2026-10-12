@@ -44,13 +44,16 @@ beforeEach(async () => {
   pasta = await mkdtemp(path.join(tmpdir(), "dialys-agenda-"));
   process.env.DIALYS_BANCO_ARQUIVO = path.join(pasta, "banco.json");
   USUARIOS.push(RESTRITO);
-  // Os clientes da carteira são as contas com reunião analisada.
-  for (const [contaId, contaNome] of [
-    ["c-001", "Metalúrgica Vale Forte"],
-    ["c-002", "Rede Bom Preço Supermercados"],
-    ["c-003", "Clínica Santa Aurora"],
-  ]) {
-    await receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome }, { motor: motorFalso() });
+  // Os clientes da carteira são as contas com reunião analisada. Cada usuário tem as próprias reuniões: as
+  // mesmas três entram para o Ricardo e para o restrito (que, pelo escopo, só vê a c-003).
+  for (const dono of [RICARDO.id, RESTRITO.id]) {
+    for (const [contaId, contaNome] of [
+      ["c-001", "Metalúrgica Vale Forte"],
+      ["c-002", "Rede Bom Preço Supermercados"],
+      ["c-003", "Clínica Santa Aurora"],
+    ]) {
+      await receberEProcessar({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome }, { motor: motorFalso() }, dono);
+    }
   }
 });
 afterEach(async () => {

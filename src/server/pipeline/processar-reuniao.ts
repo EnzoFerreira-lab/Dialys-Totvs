@@ -10,6 +10,7 @@ import { ContextoReuniaoSchema, normalizarTranscricao, type ContextoReuniao } fr
 import type { ResultadoAnalise } from "../ai/analisar-reuniao";
 import { validarEvidencias } from "../ai/validar-evidencia";
 import type { Etapa, FalhaRegistrada, NomeEtapa, ReuniaoRegistro, StatusEtapa } from "../db/banco";
+import { ID_USUARIO_DEMONSTRACAO } from "../auth/usuarios";
 import { codigoReuniao } from "@/lib/insights";
 import { atualizarReuniao, buscarReuniao, criarReuniao, ErroReuniaoDuplicada, salvarResultado } from "../db/repositorio";
 import { escolherMotor, traduzirErroAnalise, type MotorAnalise } from "./motor-analise";
@@ -98,8 +99,11 @@ function validarTexto(texto: string) {
 
 /* ---------- Etapa 1 ---------- */
 
-/** Valida, sanitiza e registra a reunião. Lança ErroEntrada sem gravar nada se a entrada for inválida. */
-export async function receberReuniao(entrada: EntradaReuniao): Promise<ReuniaoRegistro> {
+/**
+ * Valida, sanitiza e registra a reunião em nome de `usuarioId` (o dono, que passa a ser o único a vê-la).
+ * Lança ErroEntrada sem gravar nada se a entrada for inválida.
+ */
+export async function receberReuniao(entrada: EntradaReuniao, usuarioId: string): Promise<ReuniaoRegistro> {
   let contexto: ContextoReuniao | undefined;
   if (entrada.contexto !== undefined && entrada.contexto !== null) {
     const lido = ContextoReuniaoSchema.safeParse(entrada.contexto);
@@ -129,6 +133,7 @@ export async function receberReuniao(entrada: EntradaReuniao): Promise<ReuniaoRe
   const instante = agora();
   try {
       return await criarReuniao({
+      usuarioId,
       status: "EM_PROCESSAMENTO",
       origem: entrada.conteudo.nomeArquivo ? "arquivo_texto" : "texto",
       nomeArquivo: entrada.conteudo.nomeArquivo,
@@ -257,9 +262,9 @@ export async function processarReuniao(
   }
 }
 
-/** Recebimento + processamento na mesma chamada (modo síncrono da API e testes). */
-export async function receberEProcessar(entrada: EntradaReuniao, deps: DependenciasPipeline = {}) {
-  const reuniao = await receberReuniao(entrada);
+/** Recebimento + processamento na mesma chamada (testes). Sem dono informado, a persona de demonstração. */
+export async function receberEProcessar(entrada: EntradaReuniao, deps: DependenciasPipeline = {}, usuarioId = ID_USUARIO_DEMONSTRACAO) {
+  const reuniao = await receberReuniao(entrada, usuarioId);
   return processarReuniao(reuniao.id, entrada, deps);
 }
 

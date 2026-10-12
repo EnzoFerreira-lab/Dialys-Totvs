@@ -20,4 +20,4 @@ export function respostaErroAgenda(falha: unknown, requestId: string) {
   return erro(falha.status, falha.codigo, falha.message, requestId, falha.campos ? { campos: falha.campos } : undefined);
 }
 
-export const SEM_SESSAO = "Entre na plataforma para ver sua agenda e seus clientes.";
+export const SEM_SESSAO = "Sua sessão expirou ou você ainda não entrou. Entre na plataforma para continuar.";

@@ -35,10 +35,21 @@ function EnviarReuniao() {
   );
 }
 
-// Piloto: usuário fixo da persona até a autenticação real (T02).
-const USUARIO = { nome: "Ricardo Alves", cargo: "Diretor Comercial", iniciais: "RA" };
+/** Quem está logado, como o cabeçalho exibe. null: ainda carregando a sessão. */
+export type UsuarioCabecalho = { nome: string; papel: "diretor" | "gerente" | "vendedor" } | null;
 
-function UserMenu() {
+const CARGO: Record<NonNullable<UsuarioCabecalho>["papel"], string> = {
+  diretor: "Diretor Comercial",
+  gerente: "Gerente Comercial",
+  vendedor: "Executivo de Contas",
+};
+
+const iniciais = (nome: string) => {
+  const partes = nome.trim().split(/\s+/);
+  return `${partes[0]?.[0] ?? ""}${partes.length > 1 ? partes[partes.length - 1][0] : ""}`.toUpperCase();
+};
+
+function UserMenu({ usuario }: { usuario: UsuarioCabecalho }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -68,11 +79,11 @@ function UserMenu() {
         className="flex h-full items-center gap-3 pr-1 pl-3 hover:bg-shell-hover sm:gap-2.5"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[#6F6F6F] bg-[#545456] text-[10px] font-medium text-white">
-          {USUARIO.iniciais}
+          {usuario ? iniciais(usuario.nome) : ""}
         </span>
-        <span className="hidden text-left sm:block">
-          <span className="block text-[12px] leading-4 font-medium text-white">{USUARIO.nome}</span>
-          <span className="block text-[10px] leading-[14px] text-shell-text-secondary">{USUARIO.cargo}</span>
+        <span className="hidden min-w-[96px] text-left sm:block">
+          <span className="block max-w-[180px] truncate text-[12px] leading-4 font-medium text-white">{usuario?.nome ?? " "}</span>
+          <span className="block text-[10px] leading-[14px] text-shell-text-secondary">{usuario ? CARGO[usuario.papel] : " "}</span>
         </span>
         <ChevronDown
           size={16}
@@ -133,7 +144,7 @@ function AbasDaRota() {
   return <Abas pathname={usePathname()} />;
 }
 
-export function AppHeader() {
+export function AppHeader({ usuario = null }: { usuario?: UsuarioCabecalho }) {
   return (
     <header className="on-shell sticky top-0 z-10 bg-shell text-shell-text print:hidden">
       <div className="flex h-12 items-stretch pr-3 pl-4 sm:pr-[30px] sm:pl-[34px]">
@@ -151,7 +162,7 @@ export function AppHeader() {
 
         <div className="ml-auto flex shrink-0 items-stretch">
           <EnviarReuniao />
-          <UserMenu />
+          <UserMenu usuario={usuario} />
         </div>
       </div>
     </header>

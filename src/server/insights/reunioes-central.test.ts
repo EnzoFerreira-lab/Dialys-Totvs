@@ -16,6 +16,7 @@ import { motorFalso } from "../pipeline/__fixtures__/motor-falso";
 import { receberEProcessar, receberReuniao } from "../pipeline/processar-reuniao";
 import { listarReunioesCentral } from "./contas";
 import { montarResumo } from "./resumo";
+import { ID_USUARIO_DEMONSTRACAO as DEMO } from "@/server/auth/usuarios";
 
 const RICARDO = USUARIOS[0];
 const RESTRITO: Usuario = { id: "usr_teste_restrito_central", nome: "Vendedor", email: "v@t.br", papel: "vendedor", escopo: { tipo: "contas", contaIds: ["conta-beta"] } };
@@ -27,10 +28,11 @@ const removerRota = (id: string, usuario?: Usuario) =>
     params: Promise.resolve({ id }),
   });
 
-const reuniao = (contaId: string, contaNome: string, data?: string) =>
+const reuniao = (contaId: string, contaNome: string, data?: string, dono = DEMO) =>
   receberEProcessar(
     { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId, contaNome, ...(data ? { contexto: { data } } : {}) },
     { motor: motorFalso() },
+    dono,
   );
 
 let pasta: string;
@@ -45,7 +47,7 @@ afterEach(async () => {
   await rm(pasta, { recursive: true, force: true });
 });
 
-const idDe = async (data: string) => (await lerBanco()).reuniao.find((r) => r.contexto?.data === data)!.id;
+const idDe = async (data: string, dono = DEMO) => (await lerBanco()).reuniao.find((r) => r.usuarioId === dono && r.contexto?.data === data)!.id;
 
 describe("uma linha por reunião, com código estável", () => {
   it("várias reuniões do mesmo cliente têm ids e códigos distintos e nenhuma sobrescreve a outra", async () => {
@@ -53,7 +55,7 @@ describe("uma linha por reunião, com código estável", () => {
     await reuniao("conta-beta", "Beta Indústria", "2026-10-01 09:00:00");
     await reuniao("conta-horizonte", "Grupo Horizonte", "2026-10-07 15:30:00");
 
-    const linhas = await listarReunioesCentral();
+    const linhas = await listarReunioesCentral(DEMO);
     expect(linhas).toHaveLength(3);
     const horizonte = linhas.filter((l) => l.conta.id === "conta-horizonte");
     expect(horizonte.map((l) => l.codigo).sort()).toEqual(["Reunião 001", "Reunião 003"]);
@@ -71,12 +73,12 @@ describe("uma linha por reunião, com código estável", () => {
     await reuniao("conta-horizonte", "Grupo Horizonte", "2026-09-01 10:00:00");
     await reuniao("conta-beta", "Beta Indústria", "2026-10-01 09:00:00");
     await reuniao("conta-horizonte", "Grupo Horizonte", "2026-10-07 15:30:00");
-    const antes = Object.fromEntries((await listarReunioesCentral()).map((l) => [l.id, l.codigo]));
+    const antes = Object.fromEntries((await listarReunioesCentral(DEMO)).map((l) => [l.id, l.codigo]));
 
     expect((await removerRota(await idDe("2026-10-01 09:00:00"), RICARDO)).status).toBe(200);
     await reuniao("conta-gama", "Gama Serviços", "2026-10-08 11:00:00");
 
-    const depois = await listarReunioesCentral();
+    const depois = await listarReunioesCentral(DEMO);
     for (const linha of depois) if (antes[linha.id]) expect(linha.codigo).toBe(antes[linha.id]);
     expect(depois.find((l) => l.conta.id === "conta-gama")?.codigo).toBe("Reunião 004");
     expect((await lerBanco()).sequencias.reuniao).toBe(4);
@@ -84,7 +86,7 @@ describe("uma linha por reunião, com código estável", () => {
 
   it("reunião sem data informada fica sinalizada (não usa a data do processamento como se fosse a da reunião)", async () => {
     await reuniao("conta-horizonte", "Grupo Horizonte");
-    const [linha] = await listarReunioesCentral();
+    const [linha] = await listarReunioesCentral(DEMO);
     expect(linha).toMatchObject({ data: null, hora: null });
     expect(linha.processadaEm).toMatch(/^\d{4}-/);
     expect(linha.detalhe?.dataInformada).toBe(false);
@@ -128,13 +130,16 @@ describe("remover transcrição (remoção lógica)", () => {
     await reuniao("conta-horizonte", "Grupo Horizonte", "2026-09-01 10:00:00");
     await reuniao("conta-horizonte", "Grupo Horizonte", "2026-10-07 15:30:00");
     await reuniao("conta-beta", "Beta Indústria", "2026-10-01 09:00:00");
+    // O restrito tem as próprias reuniões (as do Ricardo ele nunca vê).
+    await reuniao("conta-horizonte", "Grupo Horizonte", "2026-10-07 15:30:00", RESTRITO.id);
+    await reuniao("conta-beta", "Beta Indústria", "2026-10-01 09:00:00", RESTRITO.id);
   });
 
   it("só a transcrição escolhida sai das consultas ativas, dos indicadores e do assistente", async () => {
     const alvo = await idDe("2026-10-07 15:30:00");
     const outra = await idDe("2026-09-01 10:00:00");
     const sinalAlvo = (await lerBanco()).sinal.find((s) => s.reuniaoId === alvo)!.id;
-    const kpisAntes = (await montarResumo()).kpis;
+    const kpisAntes = (await montarResumo(DEMO)).kpis;
 
     const resposta = await removerRota(alvo, RICARDO);
     expect(resposta.status).toBe(200);
@@ -147,15 +152,15 @@ describe("remover transcrição (remoção lógica)", () => {
     expect(banco.sinal.some((s) => s.reuniaoId === alvo)).toBe(true);
 
     // Consultas ativas: a reunião some; a outra do mesmo cliente fica.
-    expect((await listarAnalisesConcluidas()).map((a) => a.reuniao.id).sort()).toEqual([outra, await idDe("2026-10-01 09:00:00")].sort());
-    expect((await listarInsights()).some((i) => i.reuniao.id === alvo)).toBe(false);
-    expect(await buscarInsight(sinalAlvo)).toBeNull();
-    const kpis = (await montarResumo()).kpis;
+    expect((await listarAnalisesConcluidas(DEMO)).map((a) => a.reuniao.id).sort()).toEqual([outra, await idDe("2026-10-01 09:00:00")].sort());
+    expect((await listarInsights(DEMO)).some((i) => i.reuniao.id === alvo)).toBe(false);
+    expect(await buscarInsight(DEMO, sinalAlvo)).toBeNull();
+    const kpis = (await montarResumo(DEMO)).kpis;
     expect(kpis.reunioesAnalisadas).toBe(kpisAntes.reunioesAnalisadas - 1);
     expect(kpis.contasAnalisadas).toBe(kpisAntes.contasAnalisadas);
 
     // Central: a linha continua, com o mesmo código e sem análise; a outra reunião vira a mais recente do cliente.
-    const linhas = await listarReunioesCentral();
+    const linhas = await listarReunioesCentral(DEMO);
     expect(linhas.find((l) => l.id === alvo)).toMatchObject({ codigo: "Reunião 002", detalhe: null, transcricaoRemovidaEm: expect.any(String) });
     expect(linhas.find((l) => l.id === outra)?.detalhe).toMatchObject({ reuniaoMaisRecente: true, totalReunioes: 1 });
 
@@ -167,14 +172,16 @@ describe("remover transcrição (remoção lógica)", () => {
     expect((buscadas.dados.reunioes as Array<{ reuniaoId: string }>).map((r) => r.reuniaoId)).toEqual([outra]);
 
     // API da reunião: registro e código ficam; transcrição e análise, não.
-    const api = await (await consultarReuniaoRota(new Request(`${BASE}/reunioes/${alvo}?incluirTranscricao=true`), { params: Promise.resolve({ id: alvo }) })).json();
+    const api = await (await consultarReuniaoRota(new Request(`${BASE}/reunioes/${alvo}?incluirTranscricao=true`, { headers: { cookie: cookieDe(RICARDO) } }), { params: Promise.resolve({ id: alvo }) })).json();
     expect(api).toMatchObject({ codigo: "Reunião 002", resultado: null, transcricao: null, transcricaoRemovidaEm: expect.any(String) });
   });
 
   it("repetir não duplica; exige sessão e acesso à conta; recusa reunião em processamento", async () => {
     const alvo = await idDe("2026-10-07 15:30:00");
     expect((await removerRota(alvo)).status).toBe(401);
+    // Reunião de outro usuário: "não existe" para ele. Na carteira dele, conta fora do escopo também não.
     expect((await removerRota(alvo, RESTRITO)).status).toBe(404);
+    expect((await removerRota(await idDe("2026-10-07 15:30:00", RESTRITO.id), RESTRITO)).status).toBe(404);
     expect((await removerRota("reu_inexistente", RICARDO)).status).toBe(400);
     expect((await removerRota(`reu_${"0".repeat(32)}`, RICARDO)).status).toBe(404);
 
@@ -184,9 +191,9 @@ describe("remover transcrição (remoção lógica)", () => {
     expect((await repetida.json()).jaRemovida).toBe(true);
 
     // O restrito vê a conta-beta e pode remover a dela.
-    expect((await removerRota(await idDe("2026-10-01 09:00:00"), RESTRITO)).status).toBe(200);
+    expect((await removerRota(await idDe("2026-10-01 09:00:00", RESTRITO.id), RESTRITO)).status).toBe(200);
 
-    const emProcessamento = await receberReuniao({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-horizonte" });
+    const emProcessamento = await receberReuniao({ conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-horizonte" }, DEMO);
     const conflito = await removerRota(emProcessamento.id, RICARDO);
     expect(conflito.status).toBe(409);
     expect((await lerBanco()).reuniao.find((r) => r.id === emProcessamento.id)?.transcricaoRemovida).toBeUndefined();

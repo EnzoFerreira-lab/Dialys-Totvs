@@ -172,9 +172,9 @@ function paraHistorico({ reuniao, resultado }: AnaliseConcluida): ReuniaoHistori
  * Empresas com reunião analisada, da mais crítica para a menos; empatadas, a de análise mais recente primeiro.
  * `reuniaoEmFoco` (Central com ?reuniao=): a conta dessa reunião é exibida a partir dela, não da mais recente.
  */
-export async function listarContasInsight(opcoes: { reuniaoEmFoco?: string | null } = {}): Promise<ContaInsight[]> {
+export async function listarContasInsight(usuarioId: string, opcoes: { reuniaoEmFoco?: string | null } = {}): Promise<ContaInsight[]> {
   const grupos = new Map<string, AnaliseConcluida[]>();
-  for (const analise of await listarAnalisesConcluidas()) {
+  for (const analise of await listarAnalisesConcluidas(usuarioId)) {
     const chave = chaveConta(analise.reuniao);
     grupos.set(chave, [...(grupos.get(chave) ?? []), analise]);
   }
@@ -191,8 +191,8 @@ export async function listarContasInsight(opcoes: { reuniaoEmFoco?: string | nul
 }
 
 /** Empresas que o /envio oferece para associar uma nova reunião (só as que têm identidade própria). */
-export async function listarContasParaEnvio(): Promise<Array<{ id: string; nome: string; segmento?: string }>> {
-  return (await listarContasInsight())
+export async function listarContasParaEnvio(usuarioId: string): Promise<Array<{ id: string; nome: string; segmento?: string }>> {
+  return (await listarContasInsight(usuarioId))
     .filter((conta) => !conta.id.startsWith("reuniao-"))
     .map(({ id, nome, segmento }) => ({ id, nome, segmento }))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -204,9 +204,9 @@ export async function listarContasParaEnvio(): Promise<Array<{ id: string; nome:
  * daquela reunião. Reuniões com a transcrição removida continuam na lista (mesmo código), sem análise.
  * `podeVer`: escopo do usuário da sessão.
  */
-export async function listarReunioesCentral(podeVer: (contaId: string) => boolean = () => true): Promise<ReuniaoCentral[]> {
+export async function listarReunioesCentral(usuarioId: string, podeVer: (contaId: string) => boolean = () => true): Promise<ReuniaoCentral[]> {
   const grupos = new Map<string, AnaliseConcluida[]>();
-  for (const analise of await listarAnalisesConcluidas()) {
+  for (const analise of await listarAnalisesConcluidas(usuarioId)) {
     const chave = chaveConta(analise.reuniao);
     if (podeVer(chave)) grupos.set(chave, [...(grupos.get(chave) ?? []), analise]);
   }
@@ -226,7 +226,7 @@ export async function listarReunioesCentral(podeVer: (contaId: string) => boolea
     };
   };
   const ativas = [...grupos.entries()].flatMap(([chave, analises]) => analises.map((a) => linha(a.reuniao, montarConta(chave, analises, a.reuniao.id))));
-  const removidas = (await listarReunioesSemTranscricao()).filter((r) => podeVer(chaveConta(r))).map((r) => linha(r, null));
+  const removidas = (await listarReunioesSemTranscricao(usuarioId)).filter((r) => podeVer(chaveConta(r))).map((r) => linha(r, null));
   const peso = (r: ReuniaoCentral) => {
     const principal = r.detalhe?.sinais[0];
     return principal ? PRIORIDADE_SINAL[principal.tipo] * 2 + (principal.urgencia === "alta" ? 0 : 1) : 99;

@@ -1,7 +1,8 @@
 "use server";
 
 // "Esqueceu a senha?": as três etapas rodam no servidor (src/server/auth/recuperacao.ts). Envio de
-// e-mail simulado no piloto.
+// e-mail simulado no piloto; a senha nova é gravada no cadastro (src/server/auth/cadastro.ts).
+import { definirSenha } from "@/server/auth/cadastro";
 import {
   redefinirSenha as redefinir,
   solicitarCodigo as solicitar,
@@ -22,5 +23,8 @@ export async function conferirCodigoRecuperacao(email: unknown, codigo: unknown)
 }
 
 export async function trocarSenha(token: unknown, senha: unknown, confirmacao: unknown): Promise<RespostaRedefinicao> {
-  return redefinir(texto(token, 64), texto(senha, 200), texto(confirmacao, 200));
+  const resposta = redefinir(texto(token, 64), texto(senha, 200), texto(confirmacao, 200));
+  // E-mail sem conta: a mesma resposta de sucesso (não revela quem tem conta), sem gravar nada.
+  if (resposta.ok) await definirSenha(resposta.email, texto(senha, 200));
+  return resposta;
 }

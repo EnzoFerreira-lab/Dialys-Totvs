@@ -7,7 +7,7 @@ import { usuarioDaRequisicao } from "@/server/auth/sessao";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return comTratamento("GET /assistente/conversas/{id}", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", "Entre na plataforma para conversar com o Dialys.", requestId);
     const { id } = await params;
     if (!/^cnv_[0-9a-f]{32}$/.test(id)) return erro(400, "ID_INVALIDO", "ID de conversa inválido.", requestId);

@@ -24,7 +24,7 @@ const CorpoSchema = z.object({
 
 export async function POST(request: Request) {
   return comTratamento("POST /assistente/mensagens", async (requestId) => {
-    const usuario = usuarioDaRequisicao(request);
+    const usuario = await usuarioDaRequisicao(request);
     if (!usuario) return erro(401, "SESSAO_AUSENTE", "Entre na plataforma para conversar com o Dialys.", requestId);
     if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
       return erro(415, "TIPO_NAO_SUPORTADO", "Use Content-Type application/json.", requestId);

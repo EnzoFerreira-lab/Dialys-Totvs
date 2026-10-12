@@ -1,4 +1,5 @@
 // Operações de dados do Dialys. Único ponto que conhece o formato das tabelas.
+// Toda consulta de reuniões, análises e sinais recebe o dono (usuarioId): cada usuário só enxerga o que enviou.
 import { randomUUID } from "node:crypto";
 import { chaveConta, nomeConta } from "@/lib/insights";
 import type { ResultadoAnalise } from "../ai/analisar-reuniao";
@@ -49,14 +50,16 @@ export class ErroReuniaoDuplicada extends Error {
 const textoComparavel = (texto: string | null) => (texto ?? "").replace(/\s+/g, " ").trim();
 
 /**
- * Reunião ativa (concluída ou em análise) com o mesmo texto ou o mesmo ID de reunião da TOTVS. As que
- * falharam, as com transcrição removida e as de clientes excluídos não contam: podem ser enviadas de novo.
+ * Reunião ativa (concluída ou em análise) do mesmo dono com o mesmo texto ou o mesmo ID de reunião da TOTVS.
+ * As que falharam, as com transcrição removida e as de clientes excluídos não contam: podem ser enviadas de
+ * novo. Outro usuário pode enviar a mesma reunião: os dados de cada um são separados.
  */
-function reuniaoDuplicada(banco: Banco, dados: Pick<ReuniaoRegistro, "transcricao" | "contexto">) {
+function reuniaoDuplicada(banco: Banco, dados: Pick<ReuniaoRegistro, "transcricao" | "contexto" | "usuarioId">) {
   const texto = textoComparavel(dados.transcricao);
   const idReuniao = dados.contexto?.idReuniao;
   return banco.reuniao.find(
     (r) =>
+      r.usuarioId === dados.usuarioId &&
       (r.status === "CONCLUIDA" || r.status === "EM_PROCESSAMENTO") &&
       transcricaoAtiva(r) &&
       ((texto && textoComparavel(r.transcricao) === texto) || (idReuniao !== undefined && r.contexto?.idReuniao === idReuniao)),
@@ -72,7 +75,7 @@ export async function criarReuniao(dados: Omit<ReuniaoRegistro, "id" | "numero" 
   return transacao((banco) => {
     const duplicada = reuniaoDuplicada(banco, dados);
     if (duplicada) throw new ErroReuniaoDuplicada(comNome(structuredClone(duplicada)));
-    const reuniao: ReuniaoRegistro = { ...dados, id: novoId("reu"), numero: proximoNumeroReuniao(banco), criadaEm: agora(), atualizadaEm: agora() };
+    const reuniao: ReuniaoRegistro = { ...dados, id: novoId("reu"), numero: proximoNumeroReuniao(banco, dados.usuarioId), criadaEm: agora(), atualizadaEm: agora() };
     banco.reuniao.push(reuniao);
     return structuredClone(reuniao);
   }).then(comNome);
@@ -113,9 +116,9 @@ export async function removerTranscricao(reuniaoId: string, usuarioId: string) {
  * Reuniões concluídas cuja transcrição foi removida pela Central: a linha e o código ficam, sem a análise.
  * Reuniões com a marca antiga "cliente_removido" não entram (a leitura do banco já as converte e apaga).
  */
-export async function listarReunioesSemTranscricao(): Promise<ReuniaoRegistro[]> {
+export async function listarReunioesSemTranscricao(usuarioId: string): Promise<ReuniaoRegistro[]> {
   return (await lerBanco()).reuniao.filter(
-    (r) => r.status === "CONCLUIDA" && r.transcricaoRemovida && r.transcricaoRemovida.motivo !== "cliente_removido",
+    (r) => r.usuarioId === usuarioId && r.status === "CONCLUIDA" && r.transcricaoRemovida && r.transcricaoRemovida.motivo !== "cliente_removido",
   );
 }
 
@@ -128,9 +131,9 @@ export async function listarReunioesSemTranscricao(): Promise<ReuniaoRegistro[]>
  * Compromissos da agenda e conversas do assistente ficam (citações de reuniões apagadas deixam de abrir).
  * Recusa enquanto alguma reunião do cliente está em análise (o pipeline ainda vai gravar nela).
  */
-export async function excluirReunioesDoCliente(contaId: string) {
+export async function excluirReunioesDoCliente(usuarioId: string, contaId: string) {
   return transacao((banco) => {
-    const reunioes = banco.reuniao.filter((r) => chaveConta(r) === contaId);
+    const reunioes = banco.reuniao.filter((r) => r.usuarioId === usuarioId && chaveConta(r) === contaId);
     if (reunioes.some((r) => r.status === "EM_PROCESSAMENTO")) {
       throw new ErroRemocao("REUNIAO_EM_PROCESSAMENTO", "Uma reunião deste cliente ainda está sendo analisada. Aguarde a conclusão para excluí-lo.");
     }
@@ -140,13 +143,20 @@ export async function excluirReunioesDoCliente(contaId: string) {
 }
 
 /** Nome do cliente pelas reuniões dele (inclusive as sem transcrição ativa). */
-export async function nomeDoClienteNasReunioes(contaId: string): Promise<string | null> {
-  const reuniao = (await lerBanco()).reuniao.find((r) => chaveConta(r) === contaId);
+export async function nomeDoClienteNasReunioes(usuarioId: string, contaId: string): Promise<string | null> {
+  const reuniao = (await lerBanco()).reuniao.find((r) => r.usuarioId === usuarioId && chaveConta(r) === contaId);
   return reuniao ? nomeConta(reuniao) : null;
 }
 
+/** Reunião pelo id, de qualquer dono: só para o pipeline. As rotas usam buscarReuniaoDoUsuario. */
 export async function buscarReuniao(id: string): Promise<ReuniaoRegistro | null> {
   return (await lerBanco()).reuniao.find((r) => r.id === id) ?? null;
+}
+
+/** Reunião do usuário; a de outro dono "não existe" (mesma resposta). */
+export async function buscarReuniaoDoUsuario(id: string, usuarioId: string): Promise<ReuniaoRegistro | null> {
+  const reuniao = await buscarReuniao(id);
+  return reuniao?.usuarioId === usuarioId ? reuniao : null;
 }
 
 /** Altera a reunião dentro de uma transação e devolve a versão gravada. */
@@ -235,10 +245,10 @@ export type AnaliseConcluida = {
  * Reuniões concluídas com a análise completa e a transcrição ativa, da mais recente para a mais antiga
  * (uma leitura do banco). É a fonte da Central, do Dashboard, do resumo e do assistente.
  */
-export async function listarAnalisesConcluidas(): Promise<AnaliseConcluida[]> {
+export async function listarAnalisesConcluidas(usuarioId: string): Promise<AnaliseConcluida[]> {
   const banco = await lerBanco();
   return banco.reuniao
-    .filter((r) => r.status === "CONCLUIDA" && r.analiseId && transcricaoAtiva(r))
+    .filter((r) => r.usuarioId === usuarioId && r.status === "CONCLUIDA" && r.analiseId && transcricaoAtiva(r))
     .sort((a, b) => b.criadaEm.localeCompare(a.criadaEm))
     .flatMap((reuniao) => {
       const resultado = montarResultado(banco, reuniao.analiseId!);
@@ -266,9 +276,11 @@ export type InsightRegistro = {
 const PESO_SEVERIDADE: Record<Severidade, number> = { ALTA: 0, MÉDIA: 1, BAIXA: 2 };
 
 /** Sinais das reuniões concluídas com transcrição ativa, do mais crítico e recente para o menos. */
-export async function listarInsights(filtro: FiltroInsights = {}): Promise<InsightRegistro[]> {
+export async function listarInsights(usuarioId: string, filtro: FiltroInsights = {}): Promise<InsightRegistro[]> {
   const banco = await lerBanco();
-  const reunioes = new Map(banco.reuniao.filter((r) => r.status === "CONCLUIDA" && transcricaoAtiva(r)).map((r) => [r.id, r]));
+  const reunioes = new Map(
+    banco.reuniao.filter((r) => r.usuarioId === usuarioId && r.status === "CONCLUIDA" && transcricaoAtiva(r)).map((r) => [r.id, r]),
+  );
   const sincronizacoes = new Map(banco.sincronizacao_crm.map((s) => [s.sinalId, s]));
   return banco.sinal
     .filter((sinal) => reunioes.has(sinal.reuniaoId))
@@ -283,12 +295,12 @@ export async function listarInsights(filtro: FiltroInsights = {}): Promise<Insig
     .map((sinal) => ({ sinal, reuniao: reunioes.get(sinal.reuniaoId)!, sincronizacao: sincronizacoes.get(sinal.id) }));
 }
 
-export async function buscarInsight(sinalId: string): Promise<InsightRegistro | null> {
+export async function buscarInsight(usuarioId: string, sinalId: string): Promise<InsightRegistro | null> {
   const banco = await lerBanco();
   const sinal = banco.sinal.find((s) => s.id === sinalId);
   const reuniao = sinal && banco.reuniao.find((r) => r.id === sinal.reuniaoId);
-  // Insight de transcrição removida não existe mais para as consultas (nem para o CRM).
-  if (!sinal || !reuniao || !transcricaoAtiva(reuniao)) return null;
+  // Insight de transcrição removida (ou de outro usuário) não existe para as consultas (nem para o CRM).
+  if (!sinal || !reuniao || reuniao.usuarioId !== usuarioId || !transcricaoAtiva(reuniao)) return null;
   return { sinal, reuniao, sincronizacao: banco.sincronizacao_crm.find((s) => s.sinalId === sinalId) };
 }
 
