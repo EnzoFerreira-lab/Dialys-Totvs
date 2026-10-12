@@ -3,7 +3,7 @@
 import { Add, Building, Close, Renew, Send, VolumeUp, WarningFilled } from "@carbon/icons-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { api, ErroDaApi, type MensagemAssistenteApi } from "@/lib/api-cliente";
 import { cn } from "@/lib/cn";
@@ -65,6 +65,10 @@ const gravarSessao = (id: string | null) => {
     /* sem armazenamento: segue só em memória */
   }
 };
+// Leitura pontual do sessionStorage em useSyncExternalStore: não há evento a ouvir (a aba só muda pelo
+// próprio chat, que re-renderiza ao mudar a conversa).
+const semInscricao = () => () => {};
+const semConversaNoServidor = () => null;
 const novoIdCliente = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -112,8 +116,13 @@ export function ChatAssistente() {
   const [itens, setItens] = useState<Item[]>([]);
   const [rascunho, setRascunho] = useState("");
   const [processando, setProcessando] = useState(false);
-  // Só renderiza no navegador (useSearchParams dentro de Suspense): ler a sessão aqui é seguro.
-  const [carregandoHistorico, setCarregandoHistorico] = useState(() => lerSessao() !== null);
+  // A conversa salva na aba só existe no navegador. O componente também é renderizado no servidor, então
+  // a leitura passa por useSyncExternalStore: na hidratação vale o valor do servidor (nenhuma) e só depois
+  // o da aba, sem divergir do HTML recebido.
+  const conversaSalva = useSyncExternalStore(semInscricao, lerSessao, semConversaNoServidor);
+  /** Conversa salva que não pôde ser lida (expirou ou é de outro usuário): para de mostrar o carregamento. */
+  const [conversaFalhou, setConversaFalhou] = useState<string | null>(null);
+  const carregandoHistorico = conversaSalva !== null && conversaSalva !== conversaId && conversaSalva !== conversaFalhou;
   const [aviso, setAviso] = useState<Falha | null>(null);
   /** Id do briefing que acabou de chegar: começa a falar sozinho uma vez (só quando foi pedido agora). */
   const [falarAgora, setFalarAgora] = useState<string | null>(null);
@@ -138,9 +147,9 @@ export function ChatAssistente() {
       .catch((erro) => {
         if (!ativo) return;
         gravarSessao(null);
+        setConversaFalhou(salvo);
         if (erro instanceof ErroDaApi && erro.status === 401) setAviso(falhaDe(erro));
-      })
-      .finally(() => ativo && setCarregandoHistorico(false));
+      });
     return () => {
       ativo = false;
     };
