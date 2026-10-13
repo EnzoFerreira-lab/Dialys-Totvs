@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { chamarChatNemotron, semRaciocinio, type MensagemChat, type OpcoesNemotron } from "../ai/analisar-reuniao-nemotron";
 import { FERRAMENTAS } from "./ferramentas";
-import { ErroAssistente, type MotorAssistente } from "./motor";
+import { ErroAssistente, FERRAMENTA_NAO_ENTENDIDA, TEXTO_NAO_ENTENDIDA, type MotorAssistente } from "./motor";
 import { montarMensagens } from "./motor-claude";
 import { PROMPT_ASSISTENTE } from "./prompt-assistente";
 
@@ -17,6 +17,9 @@ const TOOLS = FERRAMENTAS.map((ferramenta) => {
   const { $schema: _schema, ...parametros } = z.toJSONSchema(ferramenta.esquema) as Record<string, unknown>;
   void _schema;
   return { type: "function" as const, function: { name: ferramenta.nome, description: ferramenta.descricao, parameters: parametros } };
+}).concat({
+  type: "function" as const,
+  function: { name: FERRAMENTA_NAO_ENTENDIDA.nome, description: FERRAMENTA_NAO_ENTENDIDA.descricao, parameters: { type: "object", properties: {} } },
 });
 
 /** Agradecimento ou cumprimento curto: não pede dados, então não exige consulta. */
@@ -57,6 +60,10 @@ export function criarMotorNemotron(opcoes: OpcoesNemotron = {}): MotorAssistente
         }
 
         const chamadas = mensagem?.tool_calls ?? [];
+        // Não entendeu (ou não consegue): para aqui, sem consultar nada nem repetir a resposta anterior.
+        if (chamadas.some((chamada) => chamada.function.name === FERRAMENTA_NAO_ENTENDIDA.nome)) {
+          return { texto: TEXTO_NAO_ENTENDIDA, naoEntendida: true };
+        }
         if (chamadas.length) {
           mensagens.push({ role: "assistant", content: mensagem?.content ?? null, tool_calls: chamadas });
           for (const chamada of chamadas) {

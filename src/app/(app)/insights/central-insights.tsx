@@ -98,13 +98,19 @@ function reuniaoInicial(todas: ReuniaoCentral[], reuniaoId: string | null, conta
   return null;
 }
 
+/** Filtro inicial: ?filtro=churn|oportunidade|objecao|... (vindo do dashboard); valor desconhecido vira "todos". */
+function filtroInicial(valor: string | null): Filtro {
+  return FILTROS.find((f) => f.id === valor)?.id ?? "todos";
+}
+
 export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const avisar = useToast();
 
-  const [filtro, setFiltro] = useState<Filtro>("todos");
+  const filtroDaUrl = searchParams.get("filtro");
+  const [filtro, setFiltro] = useState<Filtro>(() => filtroInicial(filtroDaUrl));
   const [ordem, setOrdem] = useState<Ordem>("prioridade");
   const [busca, setBusca] = useState("");
   // A seleção é sempre o id da reunião: ordenar, filtrar ou remover outras linhas não muda o que está aberto.
@@ -113,6 +119,14 @@ export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[
     const indice = todas.findIndex((r) => r.id === selecionadaId);
     return indice > 0 ? Math.floor(indice / POR_PAGINA) : 0;
   });
+  // A página fica preservada entre navegações (Activity): o useState acima não roda de novo, então um link com
+  // outro ?filtro= (ex.: "Ver todos" do dashboard) reaplica o filtro aqui.
+  const [ultimoFiltroDaUrl, setUltimoFiltroDaUrl] = useState(filtroDaUrl);
+  if (filtroDaUrl !== ultimoFiltroDaUrl) {
+    setUltimoFiltroDaUrl(filtroDaUrl);
+    setFiltro(filtroInicial(filtroDaUrl));
+    setPagina(0);
+  }
   const [sincronizando, setSincronizando] = useState(false);
   const [erroCrm, setErroCrm] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -156,15 +170,26 @@ export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[
   function selecionar(reuniao: ReuniaoCentral, rolar = true) {
     setSelecionadaId(reuniao.id);
     setErroCrm(null);
-    router.replace(`${pathname}?reuniao=${encodeURIComponent(reuniao.id)}`, { scroll: false });
+    router.replace(urlCentral(reuniao.id, filtro), { scroll: false });
     if (rolar && window.matchMedia("(max-width: 1023px)").matches) {
       detalheRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
 
+  /** A URL guarda a reunião aberta e o filtro: recarregar ou voltar pelo dashboard mantém os dois coerentes. */
+  function urlCentral(reuniaoId: string | null | undefined, filtroAtual: Filtro) {
+    const params = new URLSearchParams();
+    if (reuniaoId) params.set("reuniao", reuniaoId);
+    if (filtroAtual !== "todos") params.set("filtro", filtroAtual);
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }
+
   function mudarFiltro(novo: Filtro) {
     setFiltro(novo);
     setPagina(0);
+    setUltimoFiltroDaUrl(novo === "todos" ? null : novo);
+    router.replace(urlCentral(selecionadaId, novo), { scroll: false });
   }
 
   async function copiarLink(reuniao: ReuniaoCentral) {

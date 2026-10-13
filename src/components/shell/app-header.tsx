@@ -8,14 +8,14 @@ import { sair } from "@/app/(auth)/login/actions";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { cn } from "@/lib/cn";
 
-// Do geral para o detalhe: o dia (Home) → a carteira (Dashboard) → um cliente → uma reunião → o assistente.
+// Do geral para o detalhe: o dia (Home) → a carteira (Dashboard) → um cliente → uma reunião.
+// O Assistente Dialys não é uma aba: abre pelo ícone flutuante, em qualquer tela (AssistenteFlutuante).
 // O Envio é uma ação, não um lugar: fica como botão à direita (EnviarReuniao), não entre as abas.
 const NAV_ITEMS = [
   { href: "/clientes", label: "Home" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/contas", label: "Clientes" },
   { href: "/insights", label: "Central de Insights" },
-  { href: "/assistente", label: "Assistente Dialys" },
 ] as const;
 
 /** Atalho fixo para o Envio, em destaque. No celular, só o ícone. */

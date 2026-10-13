@@ -6,8 +6,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { MODELO_ANALISE } from "../ai/analisar-reuniao";
 import { fusoHorario } from "../config/dados";
+import { z } from "zod";
 import { FERRAMENTAS, dataBr } from "./ferramentas";
-import { ErroAssistente, type EntradaMotor, type MotorAssistente } from "./motor";
+import { ErroAssistente, FERRAMENTA_NAO_ENTENDIDA, TEXTO_NAO_ENTENDIDA, type EntradaMotor, type MotorAssistente } from "./motor";
 import { PROMPT_ASSISTENTE } from "./prompt-assistente";
 
 /** Mesmo modelo da análise, trocável sem código. */
@@ -71,15 +72,28 @@ export function criarMotorClaude(opcoes: { client?: Anthropic } = {}): MotorAssi
     nome: "claude",
     async responder(entrada) {
       const client = opcoes.client ?? new Anthropic();
-      const tools = FERRAMENTAS.map((ferramenta) =>
+      let naoEntendida = false;
+      const tools = [
+        ...FERRAMENTAS.map((ferramenta) =>
+          betaZodTool({
+            name: ferramenta.nome,
+            description: ferramenta.descricao,
+            inputSchema: ferramenta.esquema,
+            // Só o campo `dados` vai para o modelo; a execução valida de novo e checa permissão.
+            run: async (argumentos) => JSON.stringify((await entrada.consultar(ferramenta.nome, argumentos)).dados),
+          }),
+        ),
+        // Não entendeu (ou não consegue): a resposta final vira a orientação padrão, sem repetir a anterior.
         betaZodTool({
-          name: ferramenta.nome,
-          description: ferramenta.descricao,
-          inputSchema: ferramenta.esquema,
-          // Só o campo `dados` vai para o modelo; a execução valida de novo e checa permissão.
-          run: async (argumentos) => JSON.stringify((await entrada.consultar(ferramenta.nome, argumentos)).dados),
+          name: FERRAMENTA_NAO_ENTENDIDA.nome,
+          description: FERRAMENTA_NAO_ENTENDIDA.descricao,
+          inputSchema: z.object({}),
+          run: async () => {
+            naoEntendida = true;
+            return "Registrado. Responda apenas: OK.";
+          },
         }),
-      );
+      ];
 
       const final = await client.beta.messages.toolRunner({
         model: MODELO_ASSISTENTE,
@@ -97,6 +111,7 @@ export function criarMotorClaude(opcoes: { client?: Anthropic } = {}): MotorAssi
       if (final.stop_reason === "refusal") {
         throw new ErroAssistente("ASSISTENTE_RECUSOU", 422, "O modelo não respondeu a esta pergunta. Reformule e tente novamente.");
       }
+      if (naoEntendida) return { texto: TEXTO_NAO_ENTENDIDA, naoEntendida: true };
       const texto = final.content
         .filter((bloco): bloco is Anthropic.Beta.BetaTextBlock => bloco.type === "text")
         .map((bloco) => bloco.text)

@@ -334,7 +334,7 @@ export function PainelExecutivo() {
             )}
             {totais[filtro] > visiveis.length ? (
               <Link
-                href="/insights"
+                href={filtro === "todos" ? "/insights" : `/insights?filtro=${filtro}`}
                 className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-text-primary underline-offset-[3px] hover:underline"
               >
                 Ver todos os {totais[filtro]} na Central de Insights

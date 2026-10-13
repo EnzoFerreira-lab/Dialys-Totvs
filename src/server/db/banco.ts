@@ -124,8 +124,11 @@ export type MensagemConversa = {
   modo?: "claude" | "nemotron" | "demonstracao";
   fontes?: FonteMensagem[];
   consultas?: ConsultaRegistrada[];
-  /** "briefing": resposta do briefing do dia, a única que a tela lê em voz. */
-  tipo?: "briefing";
+  /**
+   * "briefing": resposta do briefing do dia, a única que a tela lê em voz.
+   * "nao_entendida": o Dialys não entendeu ou não consegue atender; a tela sugere perguntas de novo.
+   */
+  tipo?: "briefing" | "nao_entendida";
   /** Roteiro para a voz: `texto` é exibido, `fala` (quando diferente) é o que se sintetiza. */
   fala?: Array<{ texto: string; fala?: string; novoParagrafo?: boolean }>;
 };

@@ -6,6 +6,7 @@ import { useId, useState, type ReactNode } from "react";
 import { TotvsLogo } from "@/components/brand/totvs-logo";
 import { SignalTag, type SignalVariant } from "@/components/sinais/signal-tag";
 import { useToast } from "@/components/ui/provedor-toast";
+import { abrirAssistente } from "@/lib/abrir-assistente";
 import { linkCliente } from "@/lib/alertas";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/formatar";
@@ -137,13 +138,14 @@ export function DetalheConta({ conta, reuniao, sincronizando, erroCrm, onSincron
             <CheckmarkOutline size={16} aria-hidden="true" />
             Análise concluída
           </p>
-          <Link
-            href={`/assistente?conta=${encodeURIComponent(conta.id)}&nome=${encodeURIComponent(conta.nome)}`}
+          <button
+            type="button"
+            onClick={() => abrirAssistente({ conta: { id: conta.id, nome: conta.nome } })}
             className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-primary underline-offset-[3px] hover:underline print:hidden"
           >
             <Chat size={16} aria-hidden="true" />
             Perguntar ao Dialys
-          </Link>
+          </button>
           <Link
             href={linkCliente(conta.id)}
             className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-primary underline-offset-[3px] hover:underline print:hidden"

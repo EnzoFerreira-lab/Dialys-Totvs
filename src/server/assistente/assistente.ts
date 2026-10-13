@@ -159,7 +159,8 @@ export async function responderPergunta(
     const motor = deps.motor ?? escolherMotorAssistente();
     extras = { modo: motor.nome };
     try {
-      ({ texto } = await motor.responder({
+      let naoEntendida: boolean | undefined;
+      ({ texto, naoEntendida } = await motor.responder({
         pergunta,
         historico: conversa?.mensagens ?? [],
         foco,
@@ -179,6 +180,7 @@ export async function responderPergunta(
           return resultado;
         },
       }));
+      if (naoEntendida) extras.tipo = "nao_entendida";
     } catch (erro) {
       // Nada é gravado: a pergunta pode ser reenviada sem duplicar.
       throw traduzirErro(erro);

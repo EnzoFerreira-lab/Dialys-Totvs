@@ -8,6 +8,7 @@ import { DetalheCompromisso, FormularioCompromisso, type FormularioAberto } from
 import { BOTAO_ACAO_CABECALHO, BOTAO_SECUNDARIO_CABECALHO, PageHeader } from "@/components/shell/page-header";
 import { ItemMenu, MenuSuspenso } from "@/components/ui/menu-suspenso";
 import { ROTULO_STATUS, type Compromisso } from "@/lib/agenda";
+import { abrirAssistente } from "@/lib/abrir-assistente";
 import { linkReuniao } from "@/lib/alertas";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/formatar";
@@ -153,7 +154,6 @@ export function FichaCliente({ perfil, fuso, hoje, agoraIso }: { perfil: PerfilC
   const descricao = [perfil.segmento, perfil.codigoTotvs ? `Código TOTVS ${perfil.codigoTotvs}` : null, `${perfil.reunioes.length} ${perfil.reunioes.length === 1 ? "reunião" : "reuniões"}`]
     .filter(Boolean)
     .join(" · ");
-  const linkAssistente = `/assistente?${new URLSearchParams({ conta: perfil.id, nome: perfil.nome })}`;
   const linkEnvio = `/envio?${new URLSearchParams({ conta: perfil.id, nome: perfil.nome })}`;
 
   return (
@@ -165,10 +165,14 @@ export function FichaCliente({ perfil, fuso, hoje, agoraIso }: { perfil: PerfilC
         descricao={descricao}
         acoes={
           <>
-            <Link href={linkAssistente} className={BOTAO_SECUNDARIO_CABECALHO}>
+            <button
+              type="button"
+              onClick={() => abrirAssistente({ conta: { id: perfil.id, nome: perfil.nome } })}
+              className={BOTAO_SECUNDARIO_CABECALHO}
+            >
               <Chat size={16} aria-hidden="true" />
               Perguntar ao Dialys
-            </Link>
+            </button>
             <Link href={linkEnvio} className={BOTAO_SECUNDARIO_CABECALHO}>
               <DocumentAdd size={16} aria-hidden="true" />
               Enviar reunião

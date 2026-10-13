@@ -5,7 +5,7 @@ import { normalizarBusca } from "@/lib/formatar";
 import { podeAcessarConta } from "../auth/usuarios";
 import { listarContasInsight } from "../insights/contas";
 import { dataBr, type ResultadoFerramenta } from "./ferramentas";
-import type { CompromissoEmFoco, EntradaMotor, MotorAssistente } from "./motor";
+import { TEXTO_NAO_ENTENDIDA, type CompromissoEmFoco, type EntradaMotor, type MotorAssistente } from "./motor";
 
 type Periodo = { de: string; ate: string; descricao: string };
 
@@ -120,6 +120,8 @@ export function criarMotorDemonstracao(): MotorAssistente {
       // Modo empresa em foco: sem outra empresa citada, a pergunta é sobre a empresa fixada na tela.
       const carteira = /carteira|clientes|contas|todas as empresas|quais empresas/.test(q);
       let contaId = citadas.conta?.id ?? (empresaSelecionada && !carteira ? empresaSelecionada.id : null);
+      /** Empresa nomeada na própria pergunta (não só herdada do foco): "Como está a Acme?" pede o resumo dela. */
+      let empresaCitada = Boolean(citadas.conta);
 
       // Perguntas próprias de uma empresa: avaliação geral, explicação de insight, produtos e lista de insights.
       const alvoEmpresa = contaId ?? (referenciaFoco ? (foco.contas[0]?.id ?? null) : null);
@@ -162,7 +164,10 @@ export function criarMotorDemonstracao(): MotorAssistente {
               }`,
             };
           }
-          if (empresas.length === 1) contaId = String(empresas[0].contaId);
+          if (empresas.length === 1) {
+            contaId = String(empresas[0].contaId);
+            empresaCitada = true;
+          }
         }
       }
 
@@ -199,19 +204,11 @@ export function criarMotorDemonstracao(): MotorAssistente {
         const categoria = intencao.oportunidade ? "oportunidade" : intencao.objecao ? "objecao" : "risco_churn";
         return { texto: textoInsights(await consultar("consultar_insights", { categoria, ...(contaId ? { contaId } : {}) }), categoria) };
       }
-      if (contaId) return { texto: textoEmpresa(await consultar("consultar_empresa", { contaId })) };
+      // Só o foco (empresa fixada ou da conversa), sem nenhuma intenção reconhecida, não é pedido de resumo:
+      // é uma mensagem que o Dialys não entendeu, e ele não repete o que já respondeu.
+      if (contaId && (empresaCitada || referenciaFoco)) return { texto: textoEmpresa(await consultar("consultar_empresa", { contaId })) };
 
-      return {
-        texto: `Posso consultar os dados analisados pelo Dialys. Por exemplo:\n${lista([
-          'o briefing do dia, lido em voz (peça "briefing")',
-          "seus compromissos de hoje ou da semana (peça \"minha agenda\")",
-          "quais clientes precisam de atenção",
-          "reuniões deste mês (ou de um período, como 01/09 a 15/09)",
-          "o resumo de uma empresa, citando o nome dela",
-          "a ação sugerida para uma empresa e o que o cliente disse",
-          "oportunidades ou objeções registradas",
-        ])}`,
-      };
+      return { texto: TEXTO_NAO_ENTENDIDA, naoEntendida: true };
     },
   };
 }

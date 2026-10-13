@@ -124,6 +124,13 @@ describe("modo empresa em foco", () => {
     const r = await perguntar("Quais clientes precisam de atenção?");
     expect(r.resposta.consultas?.map((c) => c.ferramenta)).toEqual(["consultar_empresa"]);
   });
+
+  it("mensagem não entendida orienta o que perguntar, sem consultar nem repetir a resposta anterior", async () => {
+    const r = await perguntar("asdkjh qwe");
+    expect(r.resposta.tipo).toBe("nao_entendida");
+    expect(r.resposta.texto).toContain("Não entendi o que você pediu");
+    expect(r.resposta.consultas).toEqual([]);
+  });
 });
 
 describe("motor Nemotron (tools no formato OpenAI, fetch simulado)", () => {
@@ -177,5 +184,30 @@ describe("motor Nemotron (tools no formato OpenAI, fetch simulado)", () => {
     await responderPergunta({ usuario: RICARDO, pergunta: "Obrigado!" }, { motor, agora: AGORA });
     await responderPergunta({ usuario: RICARDO, pergunta: "Quais clientes precisam de atenção?" }, { motor, agora: AGORA });
     expect(escolhas).toEqual(["auto", "required"]);
+  });
+
+  it("quando o modelo sinaliza que não entendeu, para sem consultar e devolve a orientação", async () => {
+    const fetchFalso = vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: "tool_calls",
+                message: { content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "pedido_nao_compreendido", arguments: "{}" } }] },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    );
+    const r = await responderPergunta(
+      { usuario: RICARDO, pergunta: "xpto blablabla", contaEmFoco: "conta-grupo-horizonte" },
+      { motor: criarMotorNemotron({ fetch: fetchFalso, chave: "k" }), agora: AGORA },
+    );
+    expect(fetchFalso).toHaveBeenCalledTimes(1);
+    expect(r.resposta).toMatchObject({ modo: "nemotron", tipo: "nao_entendida" });
+    expect(r.resposta.texto).toContain("Não entendi o que você pediu");
+    expect(r.resposta.consultas).toEqual([]);
   });
 });

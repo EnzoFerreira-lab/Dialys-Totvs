@@ -12,7 +12,7 @@ export const serializarMensagem = ({ id, papel, texto, criadaEm, modo, fontes, t
     ...f,
     link: f.tipo === "reuniao" ? `/insights?reuniao=${encodeURIComponent(f.id)}` : `/contas/${encodeURIComponent(f.contaId)}`,
   })),
-  /** "briefing": a tela lê esta resposta em voz. */
+  /** "briefing": a tela lê esta resposta em voz. "nao_entendida": a tela mostra de novo as perguntas sugeridas. */
   tipo: tipo ?? null,
   fala: fala ?? null,
 });

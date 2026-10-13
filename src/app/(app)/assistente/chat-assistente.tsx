@@ -19,7 +19,8 @@ type Acao = "briefing";
 
 /** O briefing é a única sugestão respondida em voz. */
 const PEDIDO_BRIEFING = "Quero ouvir o briefing do dia.";
-const SUGESTOES: Array<{ texto: string; acao?: Acao }> = [
+type Sugestao = { texto: string; acao?: Acao };
+const SUGESTOES: Sugestao[] = [
   { texto: "Ouvir o briefing do dia", acao: "briefing" },
   { texto: "Quais clientes precisam de atenção?" },
   { texto: "O que tenho na agenda hoje?" },
@@ -42,6 +43,9 @@ const sugestoesDaEmpresa = (nome: string) => [
   "Qual ação devo priorizar com ela?",
   "Monte uma pauta para a próxima reunião com ela",
 ];
+
+/** Pedido para focar uma empresa (o número muda a cada pedido, mesmo que seja a mesma empresa). */
+export type FocoPedido = { id: string; nome: string; pedido: number };
 
 type Falha = { mensagem: string; sessao?: boolean; semChave?: boolean };
 
@@ -102,15 +106,22 @@ function BalaoAssistente({ mensagem }: { mensagem: MensagemAssistenteApi }) {
  * A conversa fica no servidor, ligada ao usuário da sessão; o id dela fica na aba (sessionStorage)
  * para sobreviver a recarregamentos. Nova conversa = contexto limpo.
  */
-export function ChatAssistente() {
+export function ChatAssistente({ compacto = false, focoPedido = null }: { compacto?: boolean; focoPedido?: FocoPedido | null } = {}) {
   const params = useSearchParams();
   const [contaFoco, setContaFoco] = useState<{ id: string; nome: string } | null>(null);
   // ?conta= também muda sem recarregar a página (a página fica viva entre navegações): acompanha na renderização.
-  const contaParam = params.get("conta");
+  // O chat compacto (painel flutuante) aparece em todas as telas: o ?conta= delas não é para ele.
+  const contaParam = compacto ? null : params.get("conta");
   const [contaLida, setContaLida] = useState<string | null | undefined>(undefined);
   if (contaParam !== contaLida) {
     setContaLida(contaParam);
     setContaFoco(contaParam ? { id: contaParam, nome: params.get("nome") ?? contaParam } : null);
+  }
+  // "Perguntar ao Dialys" de um cliente: cada pedido novo põe a empresa em foco.
+  const [pedidoLido, setPedidoLido] = useState<number | null>(null);
+  if (focoPedido && focoPedido.pedido !== pedidoLido) {
+    setPedidoLido(focoPedido.pedido);
+    setContaFoco({ id: focoPedido.id, nome: focoPedido.nome });
   }
   const [conversaId, setConversaId] = useState<string | null>(null);
   const [itens, setItens] = useState<Item[]>([]);
@@ -231,9 +242,40 @@ export function ChatAssistente() {
   const vazio = itens.length === 0;
   const longo = rascunho.length > LIMITE;
   const sugestoesEmpresa = contaFoco ? sugestoesDaEmpresa(contaFoco.nome) : null;
+  const sugestoes = sugestoesEmpresa ? sugestoesEmpresa.map((texto): Sugestao => ({ texto })) : SUGESTOES;
+  // Depois de cada resposta, as próximas perguntas sugeridas: as que ainda não foram feitas nesta conversa.
+  const perguntadas = new Set(itens.flatMap((i) => (i.tipo === "usuario" ? [i.texto] : [])));
+  const naoFeitas = sugestoes.filter((s) => !perguntadas.has(s.acao ? PEDIDO_BRIEFING : s.texto));
+  const ultimo = itens.at(-1);
+  // Pedido não entendido: mostra de novo todas as perguntas que o Dialys sabe responder.
+  const naoEntendida = ultimo?.tipo === "assistente" && ultimo.mensagem.tipo === "nao_entendida";
+  const proximas = naoEntendida ? sugestoes : (naoFeitas.length > 0 ? naoFeitas : sugestoes).slice(0, 4);
+  const mostrarProximas = !processando && !carregandoHistorico && ultimo?.tipo === "assistente";
+
+  function botaoSugestao(sugestao: Sugestao) {
+    return (
+      <li key={sugestao.texto}>
+        <button
+          type="button"
+          onClick={() => void enviar(sugestao.acao ? PEDIDO_BRIEFING : sugestao.texto, undefined, sugestao.acao)}
+          disabled={processando}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-[13px] text-white transition-colors hover:border-interactive hover:bg-interactive/10 disabled:cursor-not-allowed disabled:opacity-50",
+            sugestao.acao ? "border-interactive/70" : "border-white/20",
+          )}
+        >
+          {sugestao.acao ? <VolumeUp size={14} className="text-interactive" aria-hidden="true" /> : null}
+          {sugestao.texto}
+        </button>
+      </li>
+    );
+  }
 
   return (
-    <section aria-labelledby="titulo-chat" className="on-shell overflow-hidden rounded-[12px] bg-shell text-shell-text">
+    <section
+      aria-labelledby="titulo-chat"
+      className={cn("on-shell overflow-hidden bg-shell text-shell-text", compacto ? "rounded-b-[12px]" : "rounded-[12px]")}
+    >
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-8">
         <div className="flex items-start gap-3">
@@ -244,9 +286,11 @@ export function ChatAssistente() {
             <h2 id="titulo-chat" className="text-[18px] leading-6 font-normal text-white">
               Converse com o Dialys<span className="text-interactive">.</span>
             </h2>
-            <p className="text-[12px] text-shell-text-secondary">
-              Peça o briefing do dia para ouvi-lo em voz, ou pergunte sobre empresas, reuniões e insights.
-            </p>
+            {compacto ? null : (
+              <p className="text-[12px] text-shell-text-secondary">
+                Peça o briefing do dia para ouvi-lo em voz, ou pergunte sobre empresas, reuniões e insights.
+              </p>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -298,7 +342,10 @@ export function ChatAssistente() {
         aria-live="polite"
         aria-busy={processando}
         aria-label="Mensagens da conversa"
-        className="flex max-h-[560px] min-h-[220px] flex-col gap-4 overflow-y-auto px-5 py-5 sm:px-8"
+        className={cn(
+          "flex min-h-[220px] flex-col gap-4 overflow-y-auto px-5 py-5",
+          compacto ? "max-h-[min(380px,45dvh)]" : "max-h-[560px] sm:px-8",
+        )}
       >
         {carregandoHistorico ? (
           <li className="text-[13px] text-shell-text-secondary">Carregando a conversa…</li>
@@ -320,22 +367,7 @@ export function ChatAssistente() {
               )}
             </p>
             <ul className="mt-4 flex flex-wrap gap-2" aria-label="Sugestões de perguntas">
-              {(sugestoesEmpresa ? sugestoesEmpresa.map((texto): (typeof SUGESTOES)[number] => ({ texto })) : SUGESTOES).map((sugestao) => (
-                <li key={sugestao.texto}>
-                  <button
-                    type="button"
-                    onClick={() => void enviar(sugestao.acao ? PEDIDO_BRIEFING : sugestao.texto, undefined, sugestao.acao)}
-                    disabled={processando}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-[13px] text-white transition-colors hover:border-interactive hover:bg-interactive/10",
-                      sugestao.acao ? "border-interactive/70" : "border-white/20",
-                    )}
-                  >
-                    {sugestao.acao ? <VolumeUp size={14} className="text-interactive" aria-hidden="true" /> : null}
-                    {sugestao.texto}
-                  </button>
-                </li>
-              ))}
+              {sugestoes.map(botaoSugestao)}
             </ul>
           </li>
         ) : (
@@ -396,6 +428,22 @@ export function ChatAssistente() {
             ),
           )
         )}
+        {mostrarProximas ? (
+          <li>
+            <p className="text-[11px] text-shell-text-secondary">
+              {naoEntendida
+                ? contaFoco
+                  ? `Experimente perguntar sobre ${contaFoco.nome}`
+                  : "Experimente perguntar"
+                : contaFoco
+                  ? `Continue sobre ${contaFoco.nome}`
+                  : "Você também pode perguntar"}
+            </p>
+            <ul className="mt-1.5 flex flex-wrap gap-2" aria-label="Próximas perguntas sugeridas">
+              {proximas.map(botaoSugestao)}
+            </ul>
+          </li>
+        ) : null}
         {processando ? (
           <li className="flex flex-col items-start" aria-label="Dialys está respondendo">
             <span className="mb-1 text-[11px] font-semibold tracking-[0.06em] text-interactive uppercase">Dialys</span>
@@ -425,27 +473,6 @@ export function ChatAssistente() {
             </Link>
           ) : null}
         </p>
-      ) : null}
-
-      {/* Atalhos da empresa em foco durante a conversa (na conversa vazia, as sugestões acima já são estas). */}
-      {sugestoesEmpresa && !vazio ? (
-        <div className="border-t border-white/10 px-5 pt-3 sm:px-8">
-          <p className="text-[11px] text-shell-text-secondary">Atalhos para {contaFoco?.nome}</p>
-          <ul className="mt-1.5 flex gap-2 overflow-x-auto pb-1" aria-label={`Atalhos para ${contaFoco?.nome}`}>
-            {sugestoesEmpresa.map((texto) => (
-              <li key={texto} className="shrink-0">
-                <button
-                  type="button"
-                  onClick={() => void enviar(texto)}
-                  disabled={processando}
-                  className="rounded-full border border-white/20 px-3 py-1 text-[12px] whitespace-nowrap text-white transition-colors hover:border-interactive hover:bg-interactive/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {texto}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
 
       {/* Campo */}

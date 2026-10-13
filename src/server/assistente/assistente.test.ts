@@ -212,6 +212,7 @@ describe("motor Claude (Tool Runner real com fetch simulado)", () => {
       "mapear_produtos_empresa",
       "obter_detalhes_reuniao",
       "consultar_agenda",
+      "pedido_nao_compreendido",
     ]);
     expect(JSON.stringify(recebidas[0].system)).toContain("cache_control");
     expect(JSON.stringify(recebidas[0].messages.at(-1))).toContain("Data de hoje: 2026-10-07");
