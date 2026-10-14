@@ -7,7 +7,7 @@ import { validarEvidencias } from "../validar-evidencia";
 import { analisarReuniaoDemo } from "./analisar-reuniao-demo";
 import { atividadeCnae } from "@/lib/cnae";
 import { lerAmostraTotvs } from "./amostra-totvs";
-import { listarExemplos } from "./exemplos";
+import { EMPRESAS_EM_DESTAQUE, listarExemplos } from "./exemplos";
 import { analisarPorRegras, papeisDosLocutores } from "./heuristica";
 
 describe("analisarPorRegras", () => {
@@ -83,10 +83,15 @@ describe("amostra TOTVS (data/exemplos/totvs)", () => {
     for (const r of reunioes) expect(atividadeCnae(r.contexto.cnae)).toBeTruthy();
   });
 
-  it("menu Exemplo: agrupado por empresa em ordem alfabética, reunião mais recente primeiro", () => {
+  it("menu Exemplo: empresas em destaque primeiro, depois em ordem alfabética, reunião mais recente primeiro", () => {
     const exemplos = listarExemplos();
     expect(exemplos).toHaveLength(36);
-    const grupos = [...new Set(exemplos.map((e) => e.grupo))];
+    const todosGrupos = [...new Set(exemplos.map((e) => e.grupo))];
+    // Destaque no topo, na ordem configurada: o primeiro é o Plano de saúde · SP, com a reunião de 07/04/2026 primeiro.
+    EMPRESAS_EM_DESTAQUE.forEach((codigo, i) => expect(todosGrupos[i]).toContain(`(${codigo})`));
+    expect(todosGrupos[0]).toBe("Plano de saúde · SP (TFCKHB) · 4 reuniões");
+    expect(exemplos[0].id).toBe("totvs-1394492");
+    const grupos = todosGrupos.slice(EMPRESAS_EM_DESTAQUE.length);
     const empresas = grupos.map((g) => g.replace(/ · \d+ reuni(ão|ões)$/, ""));
     // Com nome, em ordem alfabética; sem nome ("Cliente <código>"), no fim.
     const semNome = (e: string) => e.startsWith("Cliente ") || e === "Sem cliente identificado";

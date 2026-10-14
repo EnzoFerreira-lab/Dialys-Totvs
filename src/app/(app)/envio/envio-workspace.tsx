@@ -43,8 +43,8 @@ const falha = (titulo: string, detalhe: string, semChave = false): FalhaAnalise 
 /**
  * Envio pela API pública (UC01/UC02): POST /api/v1/reunioes/processar responde na hora e o pipeline
  * roda no servidor; a tela acompanha as etapas em GET /api/v1/reunioes/{id}. Só quando a análise está
- * completa (todas as etapas concluídas e o resultado gravado), mostra isso, avisa e leva ao Dashboard
- * (onde os alertas novos aparecem destacados) ou, sem sinais, à reunião na Central de Insights.
+ * completa (todas as etapas concluídas e o resultado gravado), mostra isso, avisa e leva sempre ao
+ * Dashboard (onde os alertas novos aparecem destacados no topo).
  */
 export function EnvioWorkspace({ exemplos }: { exemplos: ExemploResumo[] }) {
   const router = useRouter();
@@ -85,8 +85,8 @@ export function EnvioWorkspace({ exemplos }: { exemplos: ExemploResumo[] }) {
       }
 
       const total = final.resultado.analise.sinais.length;
-      const comSinais = total > 0;
-      setEstado({ fase: "concluida", reuniao: final, destino: comSinais ? "o Dashboard" : "a reunião na Central de Insights" });
+      // Sempre o Dashboard (com ou sem sinais): a reunião nova aparece destacada no topo dos alertas.
+      setEstado({ fase: "concluida", reuniao: final, destino: "o Dashboard" });
       // A pessoa vê todas as etapas concluídas antes de sair da tela.
       await new Promise((resolver) => setTimeout(resolver, PAUSA_CONCLUSAO_MS));
       if (controle.signal.aborted) return;
@@ -94,7 +94,7 @@ export function EnvioWorkspace({ exemplos }: { exemplos: ExemploResumo[] }) {
         titulo: "Análise concluída com sucesso!",
         descricao: `${total} ${total === 1 ? "sinal identificado" : "sinais identificados"} · ${final.conta.nome}.`,
       });
-      router.push(comSinais ? `/dashboard?nova=${final.id}` : `/insights?reuniao=${encodeURIComponent(final.id)}`);
+      router.push(`/dashboard?nova=${encodeURIComponent(final.id)}`);
       // Análise entregue: a tela volta limpa. Em falha, o texto fica no campo para tentar de novo.
       setVersaoComposer((versao) => versao + 1);
       setEstado({ fase: "ocioso" });

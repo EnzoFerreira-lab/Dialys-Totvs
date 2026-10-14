@@ -1,7 +1,8 @@
 // Transcrições do menu Exemplo: a amostra real (anonimizada) enviada pela TOTVS.
 // A lista vai para a página só com títulos; o texto é buscado ao escolher (página leve).
-// Agrupada por empresa (mesmo nome da Central, do Dashboard e de Clientes), em ordem alfabética, com as
-// empresas sem nome no fim; dentro de cada empresa, da reunião mais recente para a mais antiga.
+// Agrupada por empresa (mesmo nome da Central, do Dashboard e de Clientes): primeiro as empresas em destaque,
+// depois as demais em ordem alfabética, com as empresas sem nome no fim; dentro de cada empresa, da reunião
+// mais recente para a mais antiga.
 import { descreverContexto, type ExemploCompleto, type ExemploResumo } from "@/lib/transcricao";
 import { nomeDoCliente } from "../../clientes/identificacao";
 import { lerAmostraTotvs } from "./amostra-totvs";
@@ -9,11 +10,21 @@ import { lerAmostraTotvs } from "./amostra-totvs";
 const ID_AMOSTRA = "totvs-";
 const SEM_EMPRESA = "Sem cliente identificado";
 
+/**
+ * Empresas no topo do menu, nesta ordem (código do cliente). Plano de saúde · SP: a reunião de 07/04/2026
+ * é curta e tem oportunidade, objeção de preço e valores em R$, boa para subir ao vivo na apresentação.
+ */
+export const EMPRESAS_EM_DESTAQUE = ["TFCKHB"];
+const posicaoDestaque = (codigo?: string | null) => {
+  const posicao = codigo ? EMPRESAS_EM_DESTAQUE.indexOf(codigo) : -1;
+  return posicao === -1 ? EMPRESAS_EM_DESTAQUE.length : posicao;
+};
+
 export function listarExemplos(): ExemploResumo[] {
   const itens = lerAmostraTotvs().map((reuniao) => {
     const codigo = reuniao.contexto.codigoCliente;
     const nome = nomeDoCliente(reuniao.contexto);
-    return { reuniao, empresa: nome ?? (codigo ? `Cliente ${codigo}` : SEM_EMPRESA), semNome: !nome };
+    return { reuniao, empresa: nome ?? (codigo ? `Cliente ${codigo}` : SEM_EMPRESA), semNome: !nome, destaque: posicaoDestaque(codigo) };
   });
   const porEmpresa = new Map<string, number>();
   for (const { empresa } of itens) porEmpresa.set(empresa, (porEmpresa.get(empresa) ?? 0) + 1);
@@ -25,6 +36,7 @@ export function listarExemplos(): ExemploResumo[] {
   return itens
     .sort(
       (a, b) =>
+        a.destaque - b.destaque ||
         // Sem nome (só o código ou nem isso) vai para o fim.
         Number(a.semNome) - Number(b.semNome) ||
         Number(a.empresa === SEM_EMPRESA) - Number(b.empresa === SEM_EMPRESA) ||

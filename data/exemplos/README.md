@@ -9,7 +9,7 @@ As reuniões do menu **Exemplo** do `/envio` vêm da base da TOTVS (`ANON_transc
 
 Os registros são os originais da TOTVS, com uma única alteração: primeiros nomes de pessoas que escaparam da anonimização no rótulo de quem fala foram trocados por `[PESSOA]`, o marcador que a própria base usa. Algumas reuniões retiradas do menu continuam nos testes das regras locais, em `src/server/ai/demo/__fixtures__/amostra-regras.json`.
 
-No menu **Exemplo**, as reuniões aparecem **agrupadas por empresa** (com o total de reuniões de cada uma), em ordem alfabética, e da mais recente para a mais antiga dentro de cada empresa; empresas sem nome vão para o fim.
+No menu **Exemplo**, as reuniões aparecem **agrupadas por empresa** (com o total de reuniões de cada uma), e da mais recente para a mais antiga dentro de cada empresa. Primeiro vêm as empresas em destaque (`EMPRESAS_EM_DESTAQUE` em `src/server/ai/demo/exemplos.ts`; hoje, Plano de saúde · SP (TFCKHB), a da demonstração ao vivo), depois as demais em ordem alfabética; empresas sem nome vão para o fim.
 
 ## Nome dos clientes
 
