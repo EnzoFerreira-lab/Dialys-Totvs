@@ -1,7 +1,7 @@
 // Cliente da API REST v1 para as telas (navegador). Um erro da API vira ErroDaApi com o código e a
 // mensagem do contrato (docs/CONTRATO_API.md), para a tela mostrar algo legível.
 import type { ErroApi, InsightApi, ListaInsightsApi, ReuniaoApi, SincronizacaoCrmApi } from "@/server/api/http";
-import type { ConversaApi, MensagemAssistenteApi, RespostaMensagemApi } from "@/server/api/assistente";
+import type { ConversaApi, MensagemAssistenteApi, RespostaMensagemApi, VozBriefingApi } from "@/server/api/assistente";
 import type { ResumoCarteira } from "@/server/insights/resumo";
 import type { ClienteResumo } from "@/server/clientes/clientes";
 import type { PautaSugerida } from "@/server/agenda/pauta";
@@ -10,7 +10,7 @@ import type { AlteracaoCompromisso, Compromisso, ListaAgendaApi, NovoCompromisso
 export type ListaClientesApi = { dados: ClienteResumo[]; paginacao: { total: number; limite: number; offset: number } };
 
 export type { ClienteResumo, Compromisso, ListaAgendaApi, PautaSugerida };
-export type { ConversaApi, InsightApi, ListaInsightsApi, MensagemAssistenteApi, RespostaMensagemApi, ReuniaoApi, ResumoCarteira, SincronizacaoCrmApi };
+export type { ConversaApi, VozBriefingApi, InsightApi, ListaInsightsApi, MensagemAssistenteApi, RespostaMensagemApi, ReuniaoApi, ResumoCarteira, SincronizacaoCrmApi };
 
 export type PerguntaAssistente = {
   mensagem: string;
@@ -77,6 +77,9 @@ export const api = {
   resumo: () => chamar<ResumoCarteira>("/api/v1/resumo"),
   perguntarAoAssistente: (corpo: PerguntaAssistente) => chamar<RespostaMensagemApi>("/api/v1/assistente/mensagens", postJson(corpo)),
   lerConversa: (id: string) => chamar<ConversaApi>(`/api/v1/assistente/conversas/${encodeURIComponent(id)}`),
+  /** Áudio do briefing na voz do ElevenLabs, com o segundo em que cada trecho começa. */
+  vozDoBriefing: (conversaId: string, mensagemId: string) =>
+    chamar<VozBriefingApi>(`/api/v1/assistente/conversas/${encodeURIComponent(conversaId)}/mensagens/${encodeURIComponent(mensagemId)}/voz`),
   listarClientes: (params: { busca?: string; limite?: number; offset?: number } = {}) =>
     chamar<ListaClientesApi>(
       `/api/v1/clientes?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]))}`,

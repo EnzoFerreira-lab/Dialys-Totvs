@@ -1,5 +1,6 @@
 // Formato público das mensagens do assistente: sem a auditoria interna de consultas (fica no servidor).
 import type { MensagemConversa } from "../db/banco";
+import type { MarcasVoz } from "../assistente/voz";
 
 export const serializarMensagem = ({ id, papel, texto, criadaEm, modo, fontes, tipo, fala }: MensagemConversa) => ({
   id,
@@ -20,3 +21,6 @@ export const serializarMensagem = ({ id, papel, texto, criadaEm, modo, fontes, t
 export type MensagemAssistenteApi = ReturnType<typeof serializarMensagem>;
 export type RespostaMensagemApi = { conversaId: string; pergunta: MensagemAssistenteApi; resposta: MensagemAssistenteApi; repetida: boolean };
 export type ConversaApi = { conversaId: string; mensagens: MensagemAssistenteApi[]; contasEmFoco: string[] };
+
+/** Voz do briefing (ElevenLabs): MP3 em data URL e o segundo em que cada trecho começa. */
+export type VozBriefingApi = MarcasVoz & { audio: string };

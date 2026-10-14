@@ -420,7 +420,7 @@ export function ChatAssistente({ compacto = false, focoPedido = null }: { compac
               <li key={item.id} className="flex flex-col items-start">
                 <span className="mb-1 text-[11px] font-semibold tracking-[0.06em] text-interactive uppercase">Dialys</span>
                 {item.mensagem.tipo === "briefing" ? (
-                  <BalaoBriefing mensagem={item.mensagem} tocarAoChegar={falarAgora === item.mensagem.id} onTocou={jaFalou} />
+                  <BalaoBriefing mensagem={item.mensagem} conversaId={conversaId} tocarAoChegar={falarAgora === item.mensagem.id} onTocou={jaFalou} />
                 ) : (
                   <BalaoAssistente mensagem={item.mensagem} />
                 )}

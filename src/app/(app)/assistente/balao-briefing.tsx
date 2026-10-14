@@ -9,7 +9,7 @@ import { FontesMensagem } from "./fontes-mensagem";
 import { OndaAudio } from "./onda-audio";
 import { useBriefingVoz } from "./use-briefing-voz";
 
-/** Ritmo médio da voz pt-BR do navegador, para a duração exibida no player. */
+/** Ritmo médio de fala em pt-BR: duração estimada até o áudio do ElevenLabs chegar com a real. */
 const CARACTERES_POR_SEGUNDO = 14;
 
 const mmss = (segundos: number) => `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
@@ -24,15 +24,18 @@ function emParagrafos(trechos: TrechoBriefing[]) {
 }
 
 /**
- * Resposta de briefing no chat: a única lida em voz (window.speechSynthesis). Começa a falar sozinha
- * quando acabou de chegar porque a pessoa pediu; vinda do histórico, só toca se ela apertar o play.
+ * Resposta de briefing no chat: a única lida em voz (ElevenLabs; a voz do navegador é a reserva). Começa a
+ * falar sozinha quando acabou de chegar porque a pessoa pediu; vinda do histórico, só toca se ela apertar o play.
  */
 export function BalaoBriefing({
   mensagem,
+  conversaId,
   tocarAoChegar,
   onTocou,
 }: {
   mensagem: MensagemAssistenteApi;
+  /** Conversa onde o briefing está gravado: o servidor só gera a voz de briefings do próprio usuário. */
+  conversaId: string | null;
   tocarAoChegar: boolean;
   onTocou: () => void;
 }) {
@@ -41,7 +44,8 @@ export function BalaoBriefing({
     () => Math.max(5, Math.round(trechos.reduce((soma, t) => soma + (t.fala ?? t.texto).length + 1, 0) / CARACTERES_POR_SEGUNDO)),
     [trechos],
   );
-  const player = useBriefingVoz(trechos, duracao);
+  const origem = useMemo(() => (conversaId ? { conversaId, mensagemId: mensagem.id } : null), [conversaId, mensagem.id]);
+  const player = useBriefingVoz(trechos, duracao, origem);
   const tocando = player.status === "tocando";
   const paragrafos = useMemo(() => emParagrafos(trechos), [trechos]);
 
@@ -60,7 +64,11 @@ export function BalaoBriefing({
           <VolumeUp size={12} aria-hidden="true" />
           Briefing do dia · em voz
         </span>
-        {tocando ? (
+        {player.carregando ? (
+          <span className="text-[11px] text-shell-text-secondary" aria-live="polite">
+            Preparando a voz…
+          </span>
+        ) : tocando ? (
           <span className="flex items-center gap-1.5 text-[11px] text-interactive">
             <span className="h-1.5 w-1.5 rounded-full bg-interactive motion-safe:animate-pulse" aria-hidden="true" />
             Falando
@@ -90,12 +98,12 @@ export function BalaoBriefing({
             max={1000}
             value={Math.round(player.progresso * 1000)}
             onChange={(evento) => player.buscar(Number(evento.target.value) / 1000)}
-            aria-valuetext={`${mmss(player.segundos)} de ${mmss(duracao)}`}
+            aria-valuetext={`${mmss(player.segundos)} de ${mmss(player.duracaoSegundos)}`}
             className="h-1 w-full cursor-pointer accent-interactive"
           />
           <div className="flex justify-between font-mono text-[11px] text-shell-text-secondary tabular-nums">
             <span>{mmss(player.segundos)}</span>
-            <span>{mmss(duracao)}</span>
+            <span>{mmss(player.duracaoSegundos)}</span>
           </div>
         </div>
       </div>
@@ -127,7 +135,9 @@ export function BalaoBriefing({
 
       <FontesMensagem fontes={mensagem.fontes} />
       <p className="mt-2.5 text-[11px] text-text-on-shell-muted" aria-live="polite">
-        {player.suportaVoz
+        {player.fonte === "elevenlabs"
+          ? "Montado com os dados analisados, sem IA · voz ElevenLabs"
+          : player.suportaVoz
           ? `Montado com os dados analisados, sem IA · voz do navegador${player.vozNome ? ` (${player.vozNome})` : ""}`
           : "Montado com os dados analisados, sem IA · síntese de voz indisponível neste navegador: acompanhe pela legenda"}
       </p>
