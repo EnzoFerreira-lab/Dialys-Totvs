@@ -20,8 +20,11 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         </Suspense>
         <main className="flex-1">{children}</main>
         <AppFooter />
-        {/* Assistente Dialys em todas as telas: ícone no canto inferior direito. */}
-        <AssistenteFlutuante />
+        {/* Assistente Dialys em todas as telas: ícone no canto inferior direito. Lê a rota (usePathname),
+            que só existe na requisição: fica em Suspense para não bloquear o pré-render das páginas. */}
+        <Suspense fallback={null}>
+          <AssistenteFlutuante />
+        </Suspense>
       </div>
     </ProvedorToast>
   );

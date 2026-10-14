@@ -76,29 +76,48 @@ function Secao({
   );
 }
 
-/** Transcrição com cada evidência marcada e numerada, para conferir de onde veio cada sinal. */
+/** Sobreposição de evidências: vale a cor do sinal mais crítico (churn > oportunidade > objeção; depois a severidade). */
+const ORDEM_TIPO: SinalValidado["tipo"][] = ["CHURN_RISK", "OPPORTUNITY", "OBJECTION"];
+const ORDEM_SEVERIDADE = ["ALTA", "MÉDIA", "BAIXA"];
+const pesoSinal = (s: SinalValidado) => ORDEM_TIPO.indexOf(s.tipo) * 10 + Math.max(0, ORDEM_SEVERIDADE.indexOf(s.severidade));
+
+/**
+ * Transcrição com cada evidência marcada e numerada, para conferir de onde veio cada sinal. Evidências que se
+ * sobrepõem (ex.: o churn dentro de uma objeção mais longa) aparecem todas: cada pedaço fica com a cor do
+ * sinal mais crítico e cada sinal mantém o número no ponto onde a citação dele começa.
+ */
 function TranscricaoDestacada({ texto, sinais }: { texto: string; sinais: SinalValidado[] }) {
-  const ordenados = sinais
-    .map((sinal, indice) => ({ sinal, numero: indice + 1 }))
-    .sort((a, b) => a.sinal.posicaoCaracterStart - b.sinal.posicaoCaracterStart);
+  const dono: Array<number | null> = new Array(texto.length).fill(null);
+  sinais.forEach((sinal, indice) => {
+    for (let i = Math.max(0, sinal.posicaoCaracterStart); i < Math.min(texto.length, sinal.posicaoCaracterEnd); i++) {
+      const atual = dono[i];
+      if (atual === null || pesoSinal(sinal) < pesoSinal(sinais[atual])) dono[i] = indice;
+    }
+  });
+  const inicios = new Map<number, number[]>();
+  sinais.forEach((sinal, indice) => inicios.set(sinal.posicaoCaracterStart, [...(inicios.get(sinal.posicaoCaracterStart) ?? []), indice + 1]));
 
   const partes: ReactNode[] = [];
-  let cursor = 0;
-  for (const { sinal, numero: n } of ordenados) {
-    if (sinal.posicaoCaracterStart < cursor) continue; // evidências sobrepostas: mantém a primeira
-    partes.push(texto.slice(cursor, sinal.posicaoCaracterStart));
+  for (let inicio = 0; inicio < texto.length; ) {
+    const indice = dono[inicio];
+    let fim = inicio + 1;
+    while (fim < texto.length && dono[fim] === indice && !inicios.has(fim)) fim++;
+    const numeros = indice === null ? [] : (inicios.get(inicio) ?? []);
     partes.push(
-      <mark
-        key={n}
-        className={cn("rounded-[2px] px-0.5 text-text-primary underline decoration-2 underline-offset-[3px]", SINAL[sinal.tipo].marca)}
-      >
-        <sup className="mr-0.5 font-sans text-[10px] font-semibold">[{n}]</sup>
-        {texto.slice(sinal.posicaoCaracterStart, sinal.posicaoCaracterEnd)}
-      </mark>,
+      indice === null ? (
+        texto.slice(inicio, fim)
+      ) : (
+        <mark
+          key={inicio}
+          className={cn("rounded-[2px] px-0.5 text-text-primary underline decoration-2 underline-offset-[3px]", SINAL[sinais[indice].tipo].marca)}
+        >
+          {numeros.length ? <sup className="mr-0.5 font-sans text-[10px] font-semibold">[{numeros.join("][")}]</sup> : null}
+          {texto.slice(inicio, fim)}
+        </mark>
+      ),
     );
-    cursor = sinal.posicaoCaracterEnd;
+    inicio = fim;
   }
-  partes.push(texto.slice(cursor));
 
   return (
     <pre className="max-h-[420px] overflow-auto rounded-[8px] bg-[#F7F7F7] p-4 font-mono text-[12.5px] leading-[1.9] whitespace-pre-wrap text-text-secondary">

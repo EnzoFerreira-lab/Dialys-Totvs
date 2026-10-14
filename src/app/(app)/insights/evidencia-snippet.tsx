@@ -17,27 +17,44 @@ const DESTAQUE: Record<Tom, { marca: string; legenda: string }> = {
 const tomDe = (tipo: TipoDestaque, urgencia?: Urgencia): Tom =>
   tipo === "churn" ? (urgencia === "media" ? "churn-atencao" : "churn-critico") : tipo;
 
-/** Quebra o texto literal nos trechos destacados, preservando a ordem original. */
+/** Prioridade quando dois destaques se sobrepõem: a ordem da legenda (o mais crítico primeiro). */
+const PRIORIDADE = Object.keys(DESTAQUE) as Tom[];
+
+/**
+ * Quebra o texto literal nos trechos destacados, preservando a ordem original. Citações que se sobrepõem
+ * (ex.: o churn dentro de uma objeção mais longa) não somem: cada pedaço fica com o destaque mais crítico
+ * que o cobre, então o churn aparece em vermelho e o restante da objeção continua em amarelo.
+ */
 function marcarTrechos({ texto, destaques }: Evidencia) {
-  const ocorrencias = destaques
-    .map((destaque) => ({ ...destaque, tom: tomDe(destaque.tipo, destaque.urgencia), inicio: texto.indexOf(destaque.trecho) }))
-    .filter((destaque) => destaque.inicio >= 0)
-    .sort((a, b) => a.inicio - b.inicio);
+  const tomPorCaractere: Array<Tom | null> = new Array(texto.length).fill(null);
+  for (const destaque of destaques) {
+    const inicio = texto.indexOf(destaque.trecho);
+    if (inicio < 0) continue;
+    const tom = tomDe(destaque.tipo, destaque.urgencia);
+    for (let i = inicio; i < inicio + destaque.trecho.length; i++) {
+      const atual = tomPorCaractere[i];
+      if (atual === null || PRIORIDADE.indexOf(tom) < PRIORIDADE.indexOf(atual)) tomPorCaractere[i] = tom;
+    }
+  }
 
   const partes: ReactNode[] = [];
-  let cursor = 0;
-  for (const { trecho, tom, inicio } of ocorrencias) {
-    if (inicio < cursor) continue; // ignora sobreposição
-    if (inicio > cursor) partes.push(texto.slice(cursor, inicio));
+  for (let inicio = 0; inicio < texto.length; ) {
+    const tom = tomPorCaractere[inicio];
+    let fim = inicio + 1;
+    while (fim < texto.length && tomPorCaractere[fim] === tom) fim++;
+    const trecho = texto.slice(inicio, fim);
     partes.push(
-      <mark key={inicio} className={cn("rounded-[2px] px-0.5 underline decoration-2 underline-offset-[3px]", DESTAQUE[tom].marca)}>
-        {trecho}
-        <span className="sr-only"> ({DESTAQUE[tom].legenda})</span>
-      </mark>,
+      tom ? (
+        <mark key={inicio} className={cn("rounded-[2px] px-0.5 underline decoration-2 underline-offset-[3px]", DESTAQUE[tom].marca)}>
+          {trecho}
+          <span className="sr-only"> ({DESTAQUE[tom].legenda})</span>
+        </mark>
+      ) : (
+        trecho
+      ),
     );
-    cursor = inicio + trecho.length;
+    inicio = fim;
   }
-  if (cursor < texto.length) partes.push(texto.slice(cursor));
   return partes;
 }
 
