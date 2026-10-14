@@ -7,6 +7,9 @@ import { COOKIE_SESSAO, idDoTokenSessao } from "@/server/auth/sessao";
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  // Server action (ex.: "Sair" com a sessão já vencida): redirecionar devolveria o HTML do login no lugar da
+  // resposta da action e o navegador mostraria "unexpected response". Cada action confere a sessão sozinha.
+  if (request.method === "POST" && request.headers.has("next-action")) return NextResponse.next();
   const logado = idDoTokenSessao(request.cookies.get(COOKIE_SESSAO)?.value) !== null;
 
   if (pathname === "/") return NextResponse.redirect(new URL(logado ? "/clientes" : "/login", request.url));
