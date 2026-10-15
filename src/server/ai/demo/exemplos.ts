@@ -13,8 +13,10 @@ const SEM_EMPRESA = "Sem cliente identificado";
 /**
  * Empresas no topo do menu, nesta ordem (código do cliente). Plano de saúde · SP: a reunião de 07/04/2026
  * é curta e tem oportunidade, objeção de preço e valores em R$, boa para subir ao vivo na apresentação.
+ * Hospital · BA (#702922): o cliente conta que cancelou um produto por custo ("34 mil reais que a gente liberou")
+ * e que vai cortar outras ferramentas: risco de churn com valor, que aparece como valor em risco no Dashboard.
  */
-export const EMPRESAS_EM_DESTAQUE = ["TFCKHB"];
+export const EMPRESAS_EM_DESTAQUE = ["TFCKHB", "TEZHIV"];
 const posicaoDestaque = (codigo?: string | null) => {
   const posicao = codigo ? EMPRESAS_EM_DESTAQUE.indexOf(codigo) : -1;
   return posicao === -1 ? EMPRESAS_EM_DESTAQUE.length : posicao;

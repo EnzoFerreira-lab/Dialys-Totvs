@@ -258,7 +258,15 @@ export function EnvioComposer({ analisando, onEnviar, exemplos = [] }: EnvioComp
       return;
     }
     if (extensaoDe(candidato.name) === ".json") {
-      const reunioes = extrairReunioes(await candidato.text());
+      let conteudo: string;
+      try {
+        conteudo = await candidato.text();
+      } catch {
+        // NotReadableError: o arquivo mudou ou está bloqueado por outro programa depois de escolhido.
+        setErro("Não foi possível abrir o arquivo. Feche-o em outros programas e escolha de novo.");
+        return;
+      }
+      const reunioes = extrairReunioes(conteudo);
       if (!reunioes) {
         setErro("Não foi possível ler o JSON. Confira se o arquivo está completo.");
         return;

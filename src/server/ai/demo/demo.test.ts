@@ -66,8 +66,9 @@ describe("amostra TOTVS (data/exemplos/totvs)", () => {
   };
 
   it("carrega as reuniões sem duplicatas e com metadados", () => {
-    // 36 reuniões de 15 empresas, todas com insights validados na análise com o Nemotron.
-    expect(reunioes.length).toBe(36);
+    // 37 reuniões de 16 empresas: 36 com insights validados na análise com o Nemotron, mais a #702922 (Hospital · BA),
+    // incluída por ter risco de churn com valor em R$ (valor em risco no Dashboard), ainda não validada com o Nemotron.
+    expect(reunioes.length).toBe(37);
     expect(new Set(reunioes.map((r) => r.transcricao)).size).toBe(reunioes.length);
     expect(reunioes.every((r) => r.contexto.codigoCliente && r.contexto.data)).toBe(true);
     expect(REGRESSAO.map((r) => r.id).sort()).toEqual(["1069924", "1144435", "1227164", "1282016", "747580", "920847", "959985"]);
@@ -78,19 +79,20 @@ describe("amostra TOTVS (data/exemplos/totvs)", () => {
     const porCliente = new Map<string, typeof reunioes>();
     for (const r of reunioes)
       porCliente.set(r.contexto.codigoCliente ?? "", [...(porCliente.get(r.contexto.codigoCliente ?? "") ?? []), r]);
-    expect(porCliente.size).toBe(15);
+    expect(porCliente.size).toBe(16);
     expect([...porCliente.values()].filter((lista) => lista.length >= 2).length).toBe(11);
     for (const r of reunioes) expect(atividadeCnae(r.contexto.cnae)).toBeTruthy();
   });
 
   it("menu Exemplo: empresas em destaque primeiro, depois em ordem alfabética, reunião mais recente primeiro", () => {
     const exemplos = listarExemplos();
-    expect(exemplos).toHaveLength(36);
+    expect(exemplos).toHaveLength(37);
     const todosGrupos = [...new Set(exemplos.map((e) => e.grupo))];
     // Destaque no topo, na ordem configurada: o primeiro é o Plano de saúde · SP, com a reunião de 07/04/2026 primeiro.
     EMPRESAS_EM_DESTAQUE.forEach((codigo, i) => expect(todosGrupos[i]).toContain(`(${codigo})`));
     expect(todosGrupos[0]).toBe("Plano de saúde · SP (TFCKHB) · 4 reuniões");
     expect(exemplos[0].id).toBe("totvs-1394492");
+    expect(todosGrupos[1]).toBe("Hospital · BA (TEZHIV) · 1 reunião");
     const grupos = todosGrupos.slice(EMPRESAS_EM_DESTAQUE.length);
     const empresas = grupos.map((g) => g.replace(/ · \d+ reuni(ão|ões)$/, ""));
     // Com nome, em ordem alfabética; sem nome ("Cliente <código>"), no fim.
