@@ -1,5 +1,5 @@
 // DELETE /api/v1/reunioes/{id}/transcricao: remoção lógica da transcrição desta reunião (só dela).
-// A reunião e o código ("Reunião 003") ficam; a transcrição e a análise derivada só dela (sinais,
+// A reunião e o código ("Reunião #1394492") ficam; a transcrição e a análise derivada só dela (sinais,
 // evidências, diagnóstico) saem da Central, do Dashboard, dos indicadores e do assistente. Nada é
 // apagado do banco. Exige sessão e acesso à conta da reunião (senão 404, como inexistente).
 // Repetir a chamada não duplica nada: responde 200 com jaRemovida = true.
@@ -28,7 +28,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return json(
         {
           reuniaoId: reuniao.id,
-          codigo: codigoReuniao(reuniao.numero),
+          codigo: codigoReuniao(reuniao),
           conta: { id: chaveConta(reuniao), nome: nomeConta(reuniao) },
           transcricaoRemovidaEm: reuniao.transcricaoRemovida?.em ?? null,
           jaRemovida,

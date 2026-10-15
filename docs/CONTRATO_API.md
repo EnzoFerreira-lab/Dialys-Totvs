@@ -166,14 +166,14 @@ curl -X POST "http://localhost:3000/api/v1/reunioes/processar?modo=sincrono" \
 Remoção **lógica** da transcrição desta reunião (só dela). Exige a sessão e acesso à conta da reunião (senão `404`, como inexistente). A reunião, o `numero` e o `codigo` continuam; a transcrição e a análise derivada só dela saem de `GET /insights`, `GET /resumo`, da Central, do assistente e de `POST /crm/sincronizar` (`404`). Nada é apagado do banco.
 
 ```json
-{ "reuniaoId": "reu_…", "codigo": "Reunião 003", "conta": { "id": "c-006", "nome": "Grupo Horizonte" }, "transcricaoRemovidaEm": "2026-10-07T21:15:19.582Z", "jaRemovida": false }
+{ "reuniaoId": "reu_…", "codigo": "Reunião #1394492", "conta": { "id": "c-006", "nome": "Grupo Horizonte" }, "transcricaoRemovidaEm": "2026-10-07T21:15:19.582Z", "jaRemovida": false }
 ```
 
 Repetir responde `200` com `jaRemovida: true` (sem efeito novo). Reunião ainda em análise: `409 REUNIAO_EM_PROCESSAMENTO`. Depois da remoção, `GET /reunioes/{id}` devolve `resultado: null`, `transcricao: null` (com `incluirTranscricao`) e `transcricaoRemovidaEm`.
 
 ## `GET /api/v1/reunioes/{id}`
 
-Toda reunião traz `numero` e `codigo` ("Reunião 003": número sequencial gravado na reunião, único e nunca reutilizado), `dataInformada` (`false`: a reunião não trouxe data e `criadaEm` é só a data do processamento) e `transcricaoRemovidaEm` (`null` se ativa). Os insights de `GET /insights` trazem `reuniao.codigo` e `reuniao.dataInformada`.
+Toda reunião traz `numero` (sequencial da conta, único e nunca reutilizado) e `codigo`, o código exibido em todas as telas: o ID da reunião na TOTVS ("Reunião #1394492") ou, sem ele, o número sequencial ("Reunião 003"), `dataInformada` (`false`: a reunião não trouxe data e `criadaEm` é só a data do processamento) e `transcricaoRemovidaEm` (`null` se ativa). Os insights de `GET /insights` trazem `reuniao.codigo` e `reuniao.dataInformada`.
 
 Estado do pipeline e, quando concluída, o resultado. Enquanto o status for `EM_PROCESSAMENTO`, a resposta traz `Retry-After: 2` (segundos até a próxima consulta). Uma reunião parada há mais de 6 minutos passa a `FALHOU` com `PROCESSAMENTO_INTERROMPIDO`.
 
@@ -476,7 +476,7 @@ Executadas no servidor, com argumentos validados por schema e filtro de permiss�
 | `buscar_reunioes` | Reuniões por empresa e período (`de`/`ate`, fuso de Brasília) | 10 (máx. 20) |
 | `consultar_insights` | Sinais com citação literal, criticidade, reunião e data | 10 (máx. 20) |
 | `consultar_acoes_sugeridas` | Ações e próximos passos já registrados | 5 (máx. 10) |
-| `obter_detalhes_reuniao` | Resumo, sinais e trechos da transcrição em volta das citações (não a transcrição inteira). Por `reuniaoId` ou pelo `numero` do código ("Reunião 003" → 3) | 6 trechos |
+| `obter_detalhes_reuniao` | Resumo, sinais e trechos da transcrição em volta das citações (não a transcrição inteira). Por `reuniaoId` ou pelo `numero` do código ("Reunião #1394492" → 1394492, ID da TOTVS; "Reunião 003" → 3) | 6 trechos |
 | `consultar_agenda` | **Compromissos** do próprio usuário entre `de` e `ate` (padrão: hoje), com cliente, horário, status e se o cliente tem reuniões analisadas. Separados das ações sugeridas; marca `agendaDeDemonstracao` | 31 dias, 30 itens |
 
 Toda lista informa `total` e `truncado`. Conta ou reunião fora do escopo responde igual a "não encontrada". Toda reunião devolvida traz `reuniaoId`, `codigo` e `dataInformada`; reuniões com transcrição removida não aparecem. As fontes de reunião levam a `/insights?reuniao=<id>`. Todas as consultas são de leitura: o assistente não cria nem altera compromissos.

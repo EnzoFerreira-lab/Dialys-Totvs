@@ -29,7 +29,7 @@ const ORDENS: Array<{ id: Ordem; rotulo: string }> = [
   { id: "prioridade", rotulo: "Prioridade comercial" },
   { id: "recentes", rotulo: "Reunião mais recente" },
   { id: "cliente", rotulo: "Cliente (A–Z)" },
-  { id: "codigo", rotulo: "Código da reunião" },
+  { id: "codigo", rotulo: "ID da reunião" },
 ];
 
 const POR_PAGINA = 8;
@@ -53,7 +53,8 @@ function ordenar(reunioes: ReuniaoCentral[], ordem: Ordem) {
   if (ordem === "prioridade") return reunioes; // o servidor já entrega da mais crítica para a menos
   return [...reunioes].sort((a, b) => {
     if (ordem === "cliente") return a.conta.nome.localeCompare(b.conta.nome, "pt-BR") || b.momento.localeCompare(a.momento);
-    if (ordem === "codigo") return a.numero - b.numero;
+    // Pelo ID da TOTVS (o código exibido); reuniões sem ele, pelo número sequencial, depois das que têm.
+    if (ordem === "codigo") return Number(a.idTotvs ?? Infinity) - Number(b.idTotvs ?? Infinity) || a.numero - b.numero;
     return b.momento.localeCompare(a.momento);
   });
 }
@@ -147,7 +148,7 @@ export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[
   const reunioes = useMemo(() => {
     const termo = normalizarBusca(busca.trim());
     const filtradas = todas.filter(
-      (r) => atendeFiltro(r, filtro) && (!termo || normalizarBusca(`${r.codigo} ${r.conta.nome} ${r.conta.segmento ?? ""}`).includes(termo)),
+      (r) => atendeFiltro(r, filtro) && (!termo || normalizarBusca(`${r.codigo} ${r.idTotvs ?? ""} ${r.conta.nome} ${r.conta.segmento ?? ""}`).includes(termo)),
     );
     return ordenar(filtradas, ordem);
   }, [todas, filtro, busca, ordem]);
@@ -312,7 +313,7 @@ export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[
                     setBusca(event.target.value);
                     setPagina(0);
                   }}
-                  placeholder="Buscar cliente ou código (ex.: Reunião 003)"
+                  placeholder="Buscar cliente ou ID da reunião (ex.: 1394492)"
                   className="h-10 w-full bg-transparent pr-2 pl-9 text-[13px] text-text-primary placeholder:text-text-placeholder focus:outline-2 focus:-outline-offset-2 focus:outline-focus"
                 />
               </div>
@@ -420,7 +421,8 @@ export function CentralInsights({ reunioes: todas }: { reunioes: ReuniaoCentral[
                           aria-label={`${reuniao.codigo}, ${reuniao.conta.nome}`}
                           className={cn("block w-full text-left font-mono text-[12px] whitespace-nowrap text-text-primary", ativa && "font-semibold")}
                         >
-                          {reuniao.codigo}
+                          {/* ID da reunião no sistema da TOTVS; sem ele (transcrição colada à mão), o código da conta. */}
+                          {reuniao.idTotvs ? <span title="ID da reunião na TOTVS">#{reuniao.idTotvs}</span> : reuniao.codigo}
                         </button>
                       </td>
                       <td className="truncate py-2 pl-2 text-[13px] text-text-primary" title={reuniao.conta.nome}>

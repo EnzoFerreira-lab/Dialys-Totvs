@@ -371,3 +371,23 @@ describe("agenda compartilhada com o assistente", () => {
     expect((await executarFerramenta(ctx(RICARDO), "consultar_agenda", { de: "2026-10-01", ate: "2026-12-01" })).erro).toBe(true);
   });
 });
+
+describe("código da reunião pelo ID da TOTVS", () => {
+  it("com ID da TOTVS, o código é 'Reunião #<ID>'; o Dialys acha a reunião pelo ID e ainda pelo número antigo", async () => {
+    await receberEProcessar(
+      { conteudo: { tipo: "texto", texto: transcricaoTeste() }, contaId: "conta-totvs-id", contaNome: "Cliente com ID", contexto: { data: "2026-10-05 10:00:00", idReuniao: "1394492" } },
+      { motor: motorFalso() },
+      RICARDO.id,
+    );
+    const ctx = { usuario: RICARDO, agora: AGORA };
+    const pelaId = await executarFerramenta(ctx, "obter_detalhes_reuniao", { numero: 1394492 });
+    expect(pelaId.erro).toBeFalsy();
+    expect(JSON.stringify(pelaId.dados)).toContain("Reunião #1394492");
+    const numero = (await lerBanco()).reuniao.find((r) => r.contexto?.idReuniao === "1394492")?.numero;
+    expect(JSON.stringify((await executarFerramenta(ctx, "obter_detalhes_reuniao", { numero })).dados)).toContain("Reunião #1394492");
+    // Pelo texto da pergunta, no motor por regras.
+    expect((await perguntar("Detalhe a Reunião #1394492")).resposta.texto).toContain("Reunião #1394492");
+    // Sem ID da TOTVS, continua o número da conta.
+    expect(JSON.stringify((await executarFerramenta(ctx, "obter_detalhes_reuniao", { numero: 1 })).dados)).toMatch(/Reunião 001/);
+  });
+});

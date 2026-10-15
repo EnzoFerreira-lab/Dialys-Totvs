@@ -117,7 +117,7 @@ function resumoConta(conta: ContaInsight, analises: AnaliseConcluida[]) {
 const entidadeConta = (conta: ContaInsight): EntidadeConta => ({ id: conta.id, nome: conta.nome });
 const entidadeReuniao = (a: AnaliseConcluida): EntidadeReuniao => ({
   id: a.reuniao.id,
-  codigo: codigoReuniao(a.reuniao.numero),
+  codigo: codigoReuniao(a.reuniao),
   contaId: chaveConta(a.reuniao),
   contaNome: nomeConta(a.reuniao),
   data: dataDaReuniao(a.reuniao),
@@ -126,10 +126,10 @@ const entidadeReuniao = (a: AnaliseConcluida): EntidadeReuniao => ({
 
 /**
  * Como a reunião aparece para o modelo: id (para outras consultas), código estável que o usuário vê na
- * Central ("Reunião 003") e data. dataInformada = false: a reunião não trouxe data e `data` é a do
+ * Central ("Reunião #1394492") e data. dataInformada = false: a reunião não trouxe data e `data` é a do
  * processamento; a resposta precisa dizer isso em vez de apresentá-la como a data da reunião.
  */
-const refReuniao = (r: ReuniaoRegistro) => ({ reuniaoId: r.id, codigo: codigoReuniao(r.numero), data: dataDaReuniao(r), dataInformada: temDataInformada(r) });
+const refReuniao = (r: ReuniaoRegistro) => ({ reuniaoId: r.id, codigo: codigoReuniao(r), data: dataDaReuniao(r), dataInformada: temDataInformada(r) });
 
 /** Resolve contaId (vindo da IA ou do motor) para uma conta que o usuário pode ver. */
 async function contaPermitida(ctx: ContextoConsulta, contaId: string) {
@@ -352,20 +352,24 @@ export const consultarAcoesSugeridas = definir({
 export const obterDetalhesReuniao = definir({
   nome: "obter_detalhes_reuniao",
   descricao:
-    "Detalha uma reunião analisada: empresa, data, resumo, próximos passos, produtos citados, sinais e trechos literais da transcrição em volta de cada citação (não a transcrição inteira). Informe o reuniaoId devolvido por buscar_reunioes ou consultar_insights, ou o número do código que o usuário vê na Central (\"Reunião 003\" → numero 3).",
+    "Detalha uma reunião analisada: empresa, data, resumo, próximos passos, produtos citados, sinais e trechos literais da transcrição em volta de cada citação (não a transcrição inteira). Informe o reuniaoId devolvido por buscar_reunioes ou consultar_insights, ou o número do código que o usuário vê na Central (\"Reunião #1394492\" → numero 1394492; \"Reunião 003\" → numero 3).",
   esquema: z
     .object({
       reuniaoId: z.string().regex(/^reu_[0-9a-f]{32}$/, "use o id da reunião (formato reu_<32 hex>)").optional(),
-      numero: z.number().int().min(1).max(999_999).optional().describe("Número do código da reunião: \"Reunião 003\" → 3."),
+      numero: z.number().int().min(1).max(999_999_999).optional().describe("Número do código da reunião: \"Reunião #1394492\" → 1394492 (ID da TOTVS); \"Reunião 003\" → 3."),
       incluirTrechos: z.boolean().optional().describe("Incluir trechos literais da transcrição (padrão: sim)."),
     })
     .refine((a) => Boolean(a.reuniaoId) !== (a.numero !== undefined), { message: "informe reuniaoId ou numero (um dos dois)." }),
   async executar(ctx, args) {
     const { analises } = await dadosPermitidos(ctx);
     // Só reuniões ativas e no escopo do usuário: transcrição removida ou conta sem acesso = "não encontrada".
-    const analise = analises.find((a) => (args.reuniaoId ? a.reuniao.id === args.reuniaoId : a.reuniao.numero === args.numero));
+    // Pelo número do código: primeiro o ID da TOTVS ("Reunião #1394492"), depois o sequencial da conta ("Reunião 003").
+    const analise = args.reuniaoId
+      ? analises.find((a) => a.reuniao.id === args.reuniaoId)
+      : (analises.find((a) => a.reuniao.contexto?.idReuniao === String(args.numero)) ??
+        analises.find((a) => a.reuniao.numero === args.numero));
     if (!analise && args.numero !== undefined) {
-      const codigo = codigoReuniao(args.numero);
+      const codigo = `Reunião ${args.numero > 999 ? "#" : ""}${String(args.numero).padStart(3, "0")}`;
       // Mesmo texto para inexistente, sem acesso ou com a transcrição removida: não revela qual é o caso.
       return {
         dados: { erro: `A ${codigo} não está entre as reuniões com análise ativa que este usuário pode acessar.` },
@@ -404,7 +408,7 @@ export const obterDetalhesReuniao = definir({
         procedencia: procedencia(analise),
         link: linkReuniao(reuniao.id),
       },
-      resumo: `${codigoReuniao(reuniao.numero)} ${reuniao.id} (${nomeConta(reuniao)}, ${dataBr(dataDaReuniao(reuniao))})`,
+      resumo: `${codigoReuniao(reuniao)} ${reuniao.id} (${nomeConta(reuniao)}, ${dataBr(dataDaReuniao(reuniao))})`,
       entidades: { contas: [{ id: chaveConta(reuniao), nome: nomeConta(reuniao) }], reunioes: [entidadeReuniao(analise)] },
     };
   },
@@ -610,7 +614,7 @@ export const explicarInsight = definir({
         procedencia: procedencia(a),
         link: linkReuniao(a.reuniao.id),
       },
-      resumo: `insight ${s.subtipo} (${nomeConta(a.reuniao)}, ${codigoReuniao(a.reuniao.numero)})`,
+      resumo: `insight ${s.subtipo} (${nomeConta(a.reuniao)}, ${codigoReuniao(a.reuniao)})`,
       entidades: { contas: [{ id: contaId, nome: nomeConta(a.reuniao) }], reunioes: [entidadeReuniao(a)] },
     };
   },

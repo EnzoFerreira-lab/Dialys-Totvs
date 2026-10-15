@@ -28,7 +28,7 @@ export const PautaIASchema = z.object({
         titulo: z.string().describe("Assunto em até 8 palavras."),
         detalhe: z.string().describe("Por que tratar e como abordar, em até 2 frases."),
         citacao: z.string().describe("Citação do cliente copiada de um alerta; vazio se não houver."),
-        reuniao: z.string().describe('Reunião de onde veio, ex.: "Reunião 003, 12/03/2026"; vazio se não houver.'),
+        reuniao: z.string().describe('Reunião de onde veio, ex.: "Reunião #1394492, 12/03/2026"; vazio se não houver.'),
       }),
     )
     .describe("De 2 a 5 assuntos, do mais para o menos importante."),

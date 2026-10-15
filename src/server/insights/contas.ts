@@ -130,7 +130,7 @@ function montarConta(chave: string, analisesRecebidas: AnaliseConcluida[], reuni
     nps: deAlguma((r) => r.contexto?.nps),
     reuniao: reuniao.contexto?.data ?? reuniao.criadaEm,
     reuniaoId: reuniao.id,
-    reuniaoCodigo: codigoReuniao(reuniao.numero),
+    reuniaoCodigo: codigoReuniao(reuniao),
     dataInformada: temDataInformada(reuniao),
     arquivo: reuniao.nomeArquivo ?? `reuniao_${reuniao.contexto?.idReuniao ?? reuniao.id}.txt`,
     totalReunioes: analises.length,
@@ -157,7 +157,7 @@ function paraHistorico({ reuniao, resultado }: AnaliseConcluida): ReuniaoHistori
   const principal = sinais[0];
   return {
     id: reuniao.id,
-    codigo: codigoReuniao(reuniao.numero),
+    codigo: codigoReuniao(reuniao),
     data: dataDaReuniao(reuniao),
     hora: horaDaReuniao(reuniao),
     dataInformada: temDataInformada(reuniao),
@@ -215,7 +215,8 @@ export async function listarReunioesCentral(usuarioId: string, podeVer: (contaId
     return {
       id: reuniao.id,
       numero: reuniao.numero,
-      codigo: codigoReuniao(reuniao.numero),
+      codigo: codigoReuniao(reuniao),
+      idTotvs: reuniao.contexto?.idReuniao ?? null,
       conta: { id: chaveConta(reuniao), nome: detalhe?.nome ?? nomeConta(reuniao), segmento: reuniao.contexto?.segmento },
       data: informada ? dataDaReuniao(reuniao) : null,
       hora: informada ? horaDaReuniao(reuniao) : null,

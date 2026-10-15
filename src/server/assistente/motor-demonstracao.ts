@@ -104,8 +104,8 @@ export function criarMotorDemonstracao(): MotorAssistente {
         return { texto: textoAgenda(await consultar("consultar_agenda", periodo ? { de: periodo.de, ate: periodo.ate } : {}), periodo) };
       }
 
-      // 0b. Reunião citada pelo código da Central ("Reunião 003").
-      const codigo = q.match(/\breuniao\s*#?\s*0*(\d{1,6})\b(?![/.-]\d)/);
+      // 0b. Reunião citada pelo código da Central: ID da TOTVS ("Reunião #1394492") ou sequencial ("Reunião 003").
+      const codigo = q.match(/\breuniao\s*#?\s*0*(\d{1,9})\b(?![/.-]\d)/);
       if (codigo) return { texto: textoDetalhes(await consultar("obter_detalhes_reuniao", { numero: Number(codigo[1]) })) };
 
       // 1. Empresa citada: pelo nome (no escopo do usuário) ou pelo foco da conversa.

@@ -29,7 +29,7 @@ export type Evidencia = {
 /** Uma reunião no histórico da conta (card da carteira e seletor da Central). */
 export type ReuniaoHistorico = {
   id: string;
-  /** "Reunião 003": código estável da reunião (ver codigoReuniao). */
+  /** "Reunião #1394492" (ID da TOTVS) ou "Reunião 003": código estável da reunião (ver codigoReuniao). */
   codigo: string;
   /** AAAA-MM-DD e hh:mm no fuso de Brasília. Sem data informada, são os do processamento (dataInformada = false). */
   data: string;
@@ -52,7 +52,7 @@ export type ContaInsight = {
   /** Data da reunião mais recente (ISO ou "AAAA-MM-DD hh:mm:ss"). */
   reuniao: string;
   reuniaoId: string;
-  /** Código da reunião exibida ("Reunião 003"). */
+  /** Código da reunião exibida ("Reunião #1394492"; ver codigoReuniao). */
   reuniaoCodigo: string;
   /** false: a reunião não trouxe data; `reuniao` é a data do processamento e a tela avisa. */
   dataInformada: boolean;
@@ -85,8 +85,10 @@ export type ReuniaoCentral = {
   /** Id da reunião no banco (reu_...). */
   id: string;
   numero: number;
-  /** "Reunião 003". */
+  /** "Reunião #1394492" (ver codigoReuniao). */
   codigo: string;
+  /** ID da reunião no sistema da TOTVS (ID_MEETING); null quando a transcrição chegou sem ele. */
+  idTotvs: string | null;
   conta: { id: string; nome: string; segmento?: string };
   /** AAAA-MM-DD e hh:mm informados pela reunião; null quando ela não trouxe data (a tela sinaliza). */
   data: string | null;
@@ -114,10 +116,12 @@ export function criticidadeConta(sinais: Sinal[]): Criticidade {
 const FUSO = "America/Sao_Paulo";
 
 /**
- * Código legível da reunião a partir do número sequencial gravado nela: "Reunião 001". Não depende da
- * posição na lista nem da quantidade de reuniões, então não muda ao ordenar, filtrar ou remover.
+ * Código da reunião em todas as telas, na API e no assistente: o ID da reunião na TOTVS ("Reunião #1394492"),
+ * o mesmo em qualquer conta. Sem ele (transcrição colada à mão), o número sequencial da conta ("Reunião 003").
+ * Nenhum dos dois muda ao ordenar, filtrar ou remover outras reuniões.
  */
-export const codigoReuniao = (numero: number) => `Reunião ${String(numero).padStart(3, "0")}`;
+export const codigoReuniao = (reuniao: { numero: number; contexto?: { idReuniao?: string } | null }) =>
+  reuniao.contexto?.idReuniao ? `Reunião #${reuniao.contexto.idReuniao}` : `Reunião ${String(reuniao.numero).padStart(3, "0")}`;
 
 /** A reunião trouxe a própria data (contexto.data)? Sem ela, só se conhece a data do processamento. */
 export const temDataInformada = (reuniao: { contexto?: { data?: string } | null }) => /^\d{4}-\d{2}-\d{2}/.test(reuniao.contexto?.data ?? "");

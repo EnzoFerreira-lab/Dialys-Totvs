@@ -144,7 +144,7 @@ function alertasDe(ativas: AnaliseConcluida[]): AlertaCliente[] {
           citacao: sinal.citacaoExata,
           recomendacao: sinal.recomendacaoAcao,
           confianca: sinal.confianca,
-          reuniao: { id: analise.reuniao.id, codigo: codigoReuniao(analise.reuniao.numero), data: informada ? dataDaReuniao(analise.reuniao) : null },
+          reuniao: { id: analise.reuniao.id, codigo: codigoReuniao(analise.reuniao), data: informada ? dataDaReuniao(analise.reuniao) : null },
           noCrm: sincronizados.has(sinal.id),
         },
       }));
@@ -180,7 +180,7 @@ function reuniaoDaLista(reuniao: ReuniaoRegistro, analise: AnaliseConcluida | nu
   const informada = temDataInformada(reuniao);
   return {
     id: reuniao.id,
-    codigo: codigoReuniao(reuniao.numero),
+    codigo: codigoReuniao(reuniao),
     numero: reuniao.numero,
     data: informada ? dataDaReuniao(reuniao) : null,
     hora: informada ? horaDaReuniao(reuniao) : null,
@@ -253,7 +253,7 @@ export async function listarClientesUnificados(usuario: Usuario, agora = new Dat
         totalReunioes: ativas.length + removidas.length,
         ultimaReuniao: ultimaQualquer
           ? {
-              codigo: codigoReuniao(ultimaQualquer.numero),
+              codigo: codigoReuniao(ultimaQualquer),
               data: temDataInformada(ultimaQualquer) ? dataDaReuniao(ultimaQualquer) : null,
               processadaEm: ultimaQualquer.criadaEm,
             }

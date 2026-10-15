@@ -63,9 +63,9 @@ export function serializarReuniao(
   if (removida) resultado = null;
   return {
     id: reuniao.id,
-    /** Número sequencial estável ("Reunião 003" = numero 3). */
+    /** Número sequencial da conta, estável (o código exibido é o ID da TOTVS quando existe; ver codigoReuniao). */
     numero: reuniao.numero,
-    codigo: codigoReuniao(reuniao.numero),
+    codigo: codigoReuniao(reuniao),
     status: reuniao.status,
     origem: reuniao.origem,
     ...(reuniao.nomeArquivo ? { nomeArquivo: reuniao.nomeArquivo } : {}),
@@ -124,7 +124,7 @@ export function serializarInsight({ sinal, reuniao, sincronizacao }: InsightRegi
     conta: { id: chaveConta(reuniao), nome: nomeConta(reuniao) },
     reuniao: {
       id: reuniao.id,
-      codigo: codigoReuniao(reuniao.numero),
+      codigo: codigoReuniao(reuniao),
       dataInformada: temDataInformada(reuniao),
       contaId: reuniao.contaId ?? null,
       contaNome: reuniao.contaNome ?? null,

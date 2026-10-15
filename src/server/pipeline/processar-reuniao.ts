@@ -156,7 +156,7 @@ export async function receberReuniao(entrada: EntradaReuniao, usuarioId: string)
     throw new ErroEntrada(
       "REUNIAO_DUPLICADA",
       409,
-      `Esta reunião ${situacao} (${codigoReuniao(existente.numero)}${cliente ? ` · ${cliente}` : ""}). Envie uma reunião diferente.`,
+      `Esta reunião ${situacao} (${codigoReuniao(existente)}${cliente ? ` · ${cliente}` : ""}). Envie uma reunião diferente.`,
     );
   }
 }

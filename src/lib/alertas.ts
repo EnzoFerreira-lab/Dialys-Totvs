@@ -11,7 +11,7 @@ export type Alerta = {
   contaId: string;
   empresa: string;
   reuniaoId: string;
-  /** "Reunião 003". */
+  /** "Reunião #1394492" (ver codigoReuniao). */
   reuniaoCodigo: string;
   /** Data e hora da reunião, ou "Data não informada" (a data do processamento não é a da reunião). */
   quando: string;
